@@ -35,10 +35,26 @@ export class NodeService extends AbstractGraphService {
         } else {
             nodeEl.textContent = node.id;
         }
-        nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : 'white';
-        nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
-        nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.15';
-        nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
+        if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) {
+            let index = this.highlightService.parentIndex(node);
+            let opacity = 0.75 - (index * 10) / 100;
+            nodeEl.style.color = 'orange';
+            nodeEl.style.fontWeight = '500';
+            nodeEl.style.opacity = (opacity < 0.25 ? 0.25 : opacity) + '';
+            nodeEl.style.fontSize = '0.65rem';
+            if(node.id.contains('Samind.md')) {
+                nodeEl.style.fontWeight = '800';
+                nodeEl.style.color = 'green';
+                nodeEl.style.opacity = '1';
+                nodeEl.style.fontSize = '.85rem';
+            }
+        } else {
+            nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : 'white';
+            nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
+            nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.15';
+            nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
+        }
+
         nodeEl.style.marginTop = '-.75rem';
         nodeEl.className = 'node-label';
         return new CSS2DObject(nodeEl);
@@ -61,17 +77,29 @@ export class NodeService extends AbstractGraphService {
 
         if (node) {
             this.highlightService.addNode(node);
-            node.neighbors.forEach((neighbor) =>
-                this.highlightService.addNode(neighbor)
-            );
-            const nodeLinks = this.plugin.globalGraph.clone().getLinksWithNode(node.id);
+            node.neighbors.forEach((neighbor) => this.highlightService.addNode(neighbor));
 
-            if (nodeLinks)
-                nodeLinks.forEach((link: Link) => this.highlightService.addLink(link));
+            this.checkRelations(node.id);
+
         }
         this.hoveredNode = node ?? null;
         this.update();
     };
+
+    private checkRelations(id: string, recursive = false): void {
+        const nodeLinks = this.plugin.globalGraph.clone().getLinksWithNode(id);
+
+        if (nodeLinks) {
+            nodeLinks.forEach((link: Link) => {
+                if (!recursive)
+                    this.highlightService.addLink(link);
+                if (link.source !== id) {
+                    this.highlightService.addParent(link.source);
+                    this.checkRelations(link.source, true);
+                }
+            });
+        }
+    }
 
     private isNodeVisible(node: Node): boolean {
         return this.plugin.getSettings().filters.doShowOrphans || node.links.length > 0;
@@ -83,6 +111,9 @@ export class NodeService extends AbstractGraphService {
             // multiple groups -> last match wins
             if (NodeGroup.matches(group.query, node)) color = group.color;
         });
+        if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) {
+            return color;
+        }
         if (this.highlightService.getNodeSize() > 0 && !this.highlightService.hasNode(node)) {
             const matchRgb = color.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
             if (matchRgb) {

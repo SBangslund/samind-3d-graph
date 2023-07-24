@@ -5,6 +5,7 @@ import { AbstractGraphService } from "./AbstractGraphService";
 export class HighlightService extends AbstractGraphService {
 	private readonly links: Set<Link> = new Set();
 	private readonly nodes: Set<string> = new Set();
+    private readonly parents: Set<string> = new Set();
 
     public update(): void {
         this.instance
@@ -16,6 +17,7 @@ export class HighlightService extends AbstractGraphService {
     public clear(): void {
         this.links.clear();
         this.nodes.clear();
+        this.parents.clear();
     }
 
     public addLink(link: Link): void {
@@ -26,6 +28,10 @@ export class HighlightService extends AbstractGraphService {
         this.nodes.add(node.id);
     }
 
+    public addParent(id: string): void {
+        this.parents.add(id);
+    }
+
 	public hasLink(link: Link): boolean {
 		return this.links.has(link);
 	};
@@ -34,11 +40,30 @@ export class HighlightService extends AbstractGraphService {
         return this.nodes.has(node.id);
     }
 
+    public isParent(node: Node): boolean {
+        return this.parents.has(node.id);
+    }
+
+    public parentIndex(node: Node): number {
+        let keys = this.parents.keys();
+        for (let index = 0; index < this.parents.size; index++) {
+            let key = keys.next();
+            if(key.value === node.id) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
     public getLinkSize(): number {
         return this.links.size;
     }
 
     public getNodeSize(): number {
         return this.nodes.size;
+    }
+
+    public getParentSize(): number {
+        return this.parents.size;
     }
 }

@@ -33,7 +33,6 @@ export default class Graph3dPlugin extends Plugin {
 			name: "Open Global 3D Graph",
 			callback: this.openGlobalGraph,
 		});
-
 		this.addCommand({
 			id: "open-3d-graph-local",
 			name: "Open Local 3D Graph",
@@ -111,7 +110,7 @@ export default class Graph3dPlugin extends Plugin {
 	}
 
 	private onGraphCacheReady = () => {
-		console.log("Graph cache is ready");
+		console.info("Graph cache is ready");
 		this.cacheIsReady.value = true;
 		this.onGraphCacheChanged();
 	};
@@ -132,7 +131,7 @@ export default class Graph3dPlugin extends Plugin {
 			);
 			this.globalGraph = Graph.createFromApp(this.app);
 		} else {
-			console.log(
+			console.info(
 				"changed but ",
 				this.cacheIsReady.value,
 				" and ",

@@ -10,8 +10,6 @@ import { LinkService } from "../graph/controllers/LinkService"
 import { NodeService } from "../graph/controllers/NodeService"
 import { SettingsService } from "../graph/controllers/SettingsService"
 
-import * as three from 'three';
-
 // Adapted from https://github.com/vasturiano/3d-force-graph/blob/master/example/highlight/index.html
 // D3.js 3D Force Graph
 
@@ -46,6 +44,12 @@ export class ForceGraph {
 		this.initServices();
 		this.nodeService.init();
 		this.linkService.init();
+
+		// TODO: Add check for change sin search bar. This should then be reflected onto the graph.
+		/*setInterval(() => {
+			let test = document.getElementsByClassName('search-info-container')[0];
+			console.log(((test as HTMLElement).children[0] as HTMLElement)?.outerText);
+		}, 1000)*/
 	}
 
 	private initListeners() {

@@ -22,6 +22,7 @@ export class NodeService extends AbstractGraphService {
     public init(): void {
         this.instance
             .nodeColor((node: Node) => this.getNodeColor(node))
+            .nodeOpacity(.85)
             .nodeVisibility((node: Node) => this.isNodeVisible(node))
             .nodeThreeObject((node: Node) => this.createNodeThreeObject(node))
             .nodeThreeObjectExtend(true)
@@ -40,7 +41,7 @@ export class NodeService extends AbstractGraphService {
         }
         if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) {
             let index = this.highlightService.parentIndex(node);
-            let opacity = 0.75 - (index * 10) / 100;
+            let opacity = 0.75 - (index * 5) / 100;
             nodeEl.style.color = 'orange';
             nodeEl.style.fontWeight = '500';
             nodeEl.style.opacity = (opacity < 0.15 ? 0.15 : opacity) + '';
@@ -97,7 +98,6 @@ export class NodeService extends AbstractGraphService {
         if (this.inspecting ||
             (!node && !this.highlightService.getNodeSize()) ||
             (node && this.hoveredNode === node)) {
-                this.highlightService.clear();
                 return;
             }
 

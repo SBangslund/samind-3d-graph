@@ -27,7 +27,7 @@ export default class Graph3dPlugin extends Plugin {
 
 	async onload() {
 		await this.init();
-		this.addRibbonIcon("glasses", "3D Graph", this.openGlobalGraph);
+		this.addRibbonIcon("share-2", "3D Graph", this.openGlobalGraph);
 		this.addCommand({
 			id: "open-3d-graph-global",
 			name: "Open Global 3D Graph",
@@ -70,7 +70,7 @@ export default class Graph3dPlugin extends Plugin {
 				if (!file) return;
 				menu.addItem((item) => {
 					item.setTitle("Open in local 3D Graph")
-						.setIcon("glasses")
+						.setIcon("share-2")
 						.onClick(() => this.openLocalGraph());
 				});
 			})

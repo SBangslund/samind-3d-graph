@@ -60,7 +60,7 @@ export class ForceGraph {
 		];
 		this.instance = ForceGraph3D({ extraRenderers: [new CSS2DRenderer] })(this.rootHtmlElement)
 			.graphData(this.getGraphData())
-			.nodeRelSize(this.plugin.getSettings().display.nodeSize)
+			.nodeRelSize(this.plugin.getSettings().display.nodeSize / 2)
 			.backgroundColor(rgba(0, 0, 0, 0.25))
 			.width(width)
 			.height(height);
@@ -81,7 +81,7 @@ export class ForceGraph {
 			.linkDirectionalArrowLength(3.5)
 			.linkDirectionalArrowRelPos(1)
 			.linkWidth((link: Link) =>
-				this.plugin.getSettings().display.linkThickness * 1.5
+				this.plugin.getSettings().display.linkThickness
 			)
 			.linkDirectionalParticles((link: Link) =>
 				this.plugin.getSettings().display.particleCount
@@ -89,9 +89,24 @@ export class ForceGraph {
 			.linkDirectionalParticleWidth(
 				this.plugin.getSettings().display.particleSize
 			)
-			.linkDirectionalParticleSpeed(0.006)
-			.onLinkHover(this.onLinkHover);
+			.linkDirectionalParticleSpeed(0.006);
 	};
+
+	private createNodeThreeObject(node: Node): CSS2DObject {
+		const nodeEl = document.createElement('div');
+		const match = node.id.match(/\/([^\/]+)\.(md|png)$/);
+		if (match) {
+			nodeEl.textContent = match[1];
+		} else {
+			nodeEl.textContent = node.id;
+		}
+		nodeEl.style.color = node.color;
+		nodeEl.style.opacity = this.isHighlightedNode(node) ? '1' : '0.15';
+		nodeEl.style.fontSize = this.isHighlightedNode(node) ? '.75rem' : '0.45rem';
+		nodeEl.style.marginTop = '-.75rem';
+		nodeEl.className = 'node-label';
+		return new CSS2DObject(nodeEl);
+	}
 
 	private updateHighlight() {
 		// trigger update of highlighted objects in scene
@@ -106,22 +121,6 @@ export class ForceGraph {
 		this.highlightedNodes.clear();
 		this.highlightedLinks.clear();
 	};
-
-	private createNodeThreeObject(node: Node): CSS2DObject {
-		const nodeEl = document.createElement('div');
-		const match = node.id.match(/\/([^\/]+)\.(md|png)$/);
-		if (match) {
-			nodeEl.textContent = match[1];
-		} else {
-			nodeEl.textContent = node.id;
-		}
-		nodeEl.style.color = node.color;
-		nodeEl.style.opacity = this.isHighlightedNode(node) ? '1' : '0.25';
-		nodeEl.style.fontSize = this.isHighlightedNode(node) ? '1rem' : '0.5rem';
-		nodeEl.style.marginTop = '1rem';
-		nodeEl.className = 'node-label';
-		return new CSS2DObject(nodeEl);
-	}
 
 	private refreshGraphData = () => {
 		this.instance.graphData(this.getGraphData());
@@ -169,6 +168,7 @@ export class ForceGraph {
 			(node && this.hoveredNode === node)
 		)
 			return;
+		(document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
 
 		this.clearHighlights();
 

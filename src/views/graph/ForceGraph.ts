@@ -100,7 +100,8 @@ export class ForceGraph {
 		} else {
 			nodeEl.textContent = node.id;
 		}
-		nodeEl.style.color = node.color;
+		nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : 'white';
+		nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
 		nodeEl.style.opacity = this.isHighlightedNode(node) ? '1' : '0.15';
 		nodeEl.style.fontSize = this.isHighlightedNode(node) ? '.75rem' : '0.45rem';
 		nodeEl.style.marginTop = '-.75rem';

@@ -1,17 +1,17 @@
 import Link from "src/graph/Link";
-import Node from "../../../graph/Node";
+import Node from "src/graph/Node";
 import { AbstractGraphService } from "./AbstractGraphService";
 
 export class HighlightService extends AbstractGraphService {
-	private readonly links: Set<Link> = new Set();
-	private readonly nodes: Set<string> = new Set();
+    private readonly links: Set<Link> = new Set();
+    private readonly nodes: Set<string> = new Set();
     private readonly parents: Set<string> = new Set();
 
     public update(): void {
         this.instance
-			.nodeColor(this.instance.nodeColor())
-			.linkColor(this.instance.linkColor())
-			.linkDirectionalParticles(this.instance.linkDirectionalParticles());
+            .nodeColor(this.instance.nodeColor())
+            .linkColor(this.instance.linkColor())
+            .linkDirectionalParticles(this.instance.linkDirectionalParticles());
     }
 
     public clear(): void {
@@ -32,9 +32,17 @@ export class HighlightService extends AbstractGraphService {
         this.parents.add(id);
     }
 
-	public hasLink(link: Link): boolean {
-		return this.links.has(link);
-	};
+    public hasLink(link: any): boolean {
+        let links = this.links.values();
+        for (let index = 0; index < this.links.size; index++) {
+            const element = links.next();
+            if ((element.value as Link).source === link.source.path
+                && (element.value as Link).target === link.target.path) {
+                return true;
+            }
+        }
+        return false;
+    };
 
     public hasNode(node: Node): boolean {
         return this.nodes.has(node.id);
@@ -48,7 +56,7 @@ export class HighlightService extends AbstractGraphService {
         let keys = this.parents.keys();
         for (let index = 0; index < this.parents.size; index++) {
             let key = keys.next();
-            if(key.value === node.id) {
+            if (key.value === node.id) {
                 return index;
             }
         }

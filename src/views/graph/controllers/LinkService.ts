@@ -17,23 +17,20 @@ export class LinkService extends AbstractGraphService {
         const settings = this.plugin.getSettings();
         this.instance
             .linkColor((link: Link) => this.getLinkColor(link))
-            .linkDirectionalArrowLength(3.5)
-            .linkDirectionalArrowRelPos(1)
-            .linkWidth((link: Link) =>
-                settings.display.linkThickness
-            )
-            .linkDirectionalParticles((link: Link) =>
-                settings.display.particleCount
-            )
-            .linkDirectionalParticleWidth(
-                settings.display.particleSize
-            )
+            .linkDirectionalParticles(settings.display.particleCount)
+            .linkWidth((link: Link) => {
+                return this.highlightService.hasLink(link) ? 3 : settings.display.linkThickness;
+            })
+            .linkDirectionalParticleWidth((link: Link) => {
+                return this.highlightService.hasLink(link) ? 3 : settings.display.particleSize;
+            } )
             .linkDirectionalParticleSpeed(0.006);
     }
+
 
     private getLinkColor(link: Link): string {
         return this.highlightService.hasLink(link)
             ? this.plugin.theme.textAccent
-            : this.plugin.theme.textMuted
+            : this.plugin.theme.textMuted;
     }
 }

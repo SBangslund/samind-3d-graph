@@ -44,10 +44,11 @@ export class NodeService extends AbstractGraphService {
             nodeEl.style.fontSize = '0.65rem';
             if(node.id.contains('Samind.md')) {
                 nodeEl.style.fontWeight = '800';
-                nodeEl.style.color = 'green';
+                nodeEl.style.color = 'orange';
                 nodeEl.style.opacity = '1';
                 nodeEl.style.fontSize = '.85rem';
             }
+            nodeEl.style.zIndex = '100';
         } else {
             nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : 'white';
             nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
@@ -80,7 +81,6 @@ export class NodeService extends AbstractGraphService {
             node.neighbors.forEach((neighbor) => this.highlightService.addNode(neighbor));
 
             this.checkRelations(node.id);
-
         }
         this.hoveredNode = node ?? null;
         this.update();
@@ -91,9 +91,13 @@ export class NodeService extends AbstractGraphService {
 
         if (nodeLinks) {
             nodeLinks.forEach((link: Link) => {
-                if (!recursive)
+                if (!recursive) {
                     this.highlightService.addLink(link);
+                }
                 if (link.source !== id) {
+                    if (recursive) {
+                        this.highlightService.addLink(link);
+                    }
                     this.highlightService.addParent(link.source);
                     this.checkRelations(link.source, true);
                 }

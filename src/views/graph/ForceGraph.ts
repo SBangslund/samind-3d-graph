@@ -10,6 +10,8 @@ import { LinkService } from "../graph/controllers/LinkService"
 import { NodeService } from "../graph/controllers/NodeService"
 import { SettingsService } from "../graph/controllers/SettingsService"
 
+import * as three from 'three';
+
 // Adapted from https://github.com/vasturiano/3d-force-graph/blob/master/example/highlight/index.html
 // D3.js 3D Force Graph
 

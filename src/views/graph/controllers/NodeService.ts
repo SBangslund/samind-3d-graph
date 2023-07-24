@@ -10,6 +10,7 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 export class NodeService extends AbstractGraphService {
 
     private hoveredNode: Node | null = null;
+    private inspecting: boolean;
 
     constructor(
         instance: ForceGraph3DInstance,
@@ -24,6 +25,8 @@ export class NodeService extends AbstractGraphService {
             .nodeVisibility((node: Node) => this.isNodeVisible(node))
             .nodeThreeObject((node: Node) => this.createNodeThreeObject(node))
             .nodeThreeObjectExtend(true)
+            .onBackgroundRightClick(() => this.onRemove())
+            .onNodeRightClick((node: Node) => this.onNodeRightClick(node))
             .onNodeHover((node: Node) => this.onNodeHover(node));
     }
 
@@ -40,7 +43,7 @@ export class NodeService extends AbstractGraphService {
             let opacity = 0.75 - (index * 10) / 100;
             nodeEl.style.color = 'orange';
             nodeEl.style.fontWeight = '500';
-            nodeEl.style.opacity = (opacity < 0.25 ? 0.25 : opacity) + '';
+            nodeEl.style.opacity = (opacity < 0.15 ? 0.15 : opacity) + '';
             nodeEl.style.fontSize = '0.65rem';
             if (node.id.contains('Samind.md')) {
                 nodeEl.style.fontWeight = '800';
@@ -70,12 +73,34 @@ export class NodeService extends AbstractGraphService {
         this.instance.nodeThreeObject((node: Node) => this.createNodeThreeObject(node))
     }
 
+    private onRemove(): void {
+        this.inspecting = false;
+        this.highlightService.clear();
+        this.update();
+    }
+
+    private onNodeRightClick(node: Node | null) {
+        this.inspecting = true;
+        (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
+
+        this.highlightService.clear();
+        if (node) {
+            this.highlightService.addNode(node);
+            node.neighbors.forEach((neighbor) => this.highlightService.addNode(neighbor));
+
+            this.checkRelations(node.id, true);
+        }
+        this.update();
+    }
+
     private onNodeHover(node: Node | null) {
-        if (
+        if (this.inspecting ||
             (!node && !this.highlightService.getNodeSize()) ||
-            (node && this.hoveredNode === node)
-        )
-            return;
+            (node && this.hoveredNode === node)) {
+                this.highlightService.clear();
+                return;
+            }
+
         (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
 
         this.highlightService.clear();
@@ -84,8 +109,9 @@ export class NodeService extends AbstractGraphService {
             this.highlightService.addNode(node);
             node.neighbors.forEach((neighbor) => this.highlightService.addNode(neighbor));
 
-            this.checkRelations(node.id);
+            this.checkRelations(node.id, false);
         }
+
         this.hoveredNode = node ?? null;
         this.update();
     };
@@ -101,9 +127,9 @@ export class NodeService extends AbstractGraphService {
                 if (link.source !== id) {
                     if (recursive) {
                         this.highlightService.addLink(link);
+                        this.highlightService.addParent(link.source);
+                        this.checkRelations(link.source, true);
                     }
-                    this.highlightService.addParent(link.source);
-                    this.checkRelations(link.source, true);
                 }
             });
         }

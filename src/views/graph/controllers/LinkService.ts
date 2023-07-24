@@ -1,0 +1,39 @@
+import Link from "src/graph/Link";
+import { AbstractGraphService } from "./AbstractGraphService";
+import { HighlightService } from "./HighlightService";
+import { ForceGraph3DInstance } from "3d-force-graph";
+import Graph3dPlugin from "src/main";
+
+export class LinkService extends AbstractGraphService {
+
+    constructor(
+        instance: ForceGraph3DInstance,
+        plugin: Graph3dPlugin,
+        private highlightService: HighlightService) {
+        super(instance, plugin);
+    }
+
+    public init(): void {
+        const settings = this.plugin.getSettings();
+        this.instance
+            .linkColor((link: Link) => this.getLinkColor(link))
+            .linkDirectionalArrowLength(3.5)
+            .linkDirectionalArrowRelPos(1)
+            .linkWidth((link: Link) =>
+                settings.display.linkThickness
+            )
+            .linkDirectionalParticles((link: Link) =>
+                settings.display.particleCount
+            )
+            .linkDirectionalParticleWidth(
+                settings.display.particleSize
+            )
+            .linkDirectionalParticleSpeed(0.006);
+    }
+
+    private getLinkColor(link: Link): string {
+        return this.highlightService.hasLink(link)
+            ? this.plugin.theme.textAccent
+            : this.plugin.theme.textMuted
+    }
+}

@@ -10,8 +10,7 @@ export class HighlightService extends AbstractGraphService {
     public update(): void {
         this.instance
             .nodeColor(this.instance.nodeColor())
-            .linkColor(this.instance.linkColor())
-            .linkDirectionalParticles(this.instance.linkDirectionalParticles());
+            .linkColor(this.instance.linkColor());
     }
 
     public clear(): void {

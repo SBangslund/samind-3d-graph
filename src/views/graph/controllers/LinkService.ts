@@ -23,14 +23,16 @@ export class LinkService extends AbstractGraphService {
             })
             .linkDirectionalParticleWidth((link: Link) => {
                 return this.highlightService.hasLink(link) ? 3 : settings.display.particleSize;
-            } )
+            })
             .linkDirectionalParticleSpeed(0.006);
     }
 
 
     private getLinkColor(link: Link): string {
-        return this.highlightService.hasLink(link)
-            ? this.plugin.theme.textAccent
+        return this.highlightService.getLinkSize() > 0
+            ? (this.highlightService.hasLink(link)
+                ? this.plugin.theme.textAccent
+                : 'rgba(255, 255, 255, 0.15)')
             : this.plugin.theme.textMuted;
     }
 }

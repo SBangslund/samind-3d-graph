@@ -42,7 +42,7 @@ export class NodeService extends AbstractGraphService {
             nodeEl.style.fontWeight = '500';
             nodeEl.style.opacity = (opacity < 0.25 ? 0.25 : opacity) + '';
             nodeEl.style.fontSize = '0.65rem';
-            if(node.id.contains('Samind.md')) {
+            if (node.id.contains('Samind.md')) {
                 nodeEl.style.fontWeight = '800';
                 nodeEl.style.color = 'orange';
                 nodeEl.style.opacity = '1';
@@ -52,7 +52,11 @@ export class NodeService extends AbstractGraphService {
         } else {
             nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : 'white';
             nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
-            nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.15';
+            nodeEl.style.opacity = this.highlightService.getNodeSize() > 0
+                ? (this.highlightService.hasNode(node)
+                    ? '1'
+                    : '0.05')
+                : '.15';
             nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
         }
 

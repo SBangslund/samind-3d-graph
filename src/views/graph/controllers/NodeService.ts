@@ -6,6 +6,8 @@ import { NodeGroup } from "src/settings/categories/GroupSettings";
 import Node from "src/graph/Node";
 import Link from "src/graph/Link";
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { WorkspaceLeaf } from "obsidian";
+import Graph from "src/graph/Graph";
 
 export class NodeService extends AbstractGraphService {
 
@@ -15,11 +17,19 @@ export class NodeService extends AbstractGraphService {
     constructor(
         instance: ForceGraph3DInstance,
         plugin: Graph3dPlugin,
-        private highlightService: HighlightService) {
+        private highlightService: HighlightService,
+        private graph: Graph) {
         super(instance, plugin);
     }
 
     public init(): void {
+        this.plugin.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf) => {
+            let id = this.plugin.app.workspace.getActiveFile()?.path;
+            if (id) {
+                let node = this.graph.getNodeById(id);
+                this.inspectNode(node);
+            }
+        });
         this.instance
             .nodeColor((node: Node) => this.getNodeColor(node))
             .nodeOpacity(.85)
@@ -81,33 +91,23 @@ export class NodeService extends AbstractGraphService {
     }
 
     private onNodeRightClick(node: Node | null) {
-        this.inspecting = true;
-        (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
-
-        this.highlightService.clear();
-        if (node) {
-            this.highlightService.addNode(node);
-            node.neighbors.forEach((neighbor) => this.highlightService.addNode(neighbor));
-
-            this.checkRelations(node.id, true);
-        }
-        this.update();
+        this.inspectNode(node);
     }
 
     private onNodeHover(node: Node | null) {
         if (this.inspecting ||
             (!node && !this.highlightService.getNodeSize()) ||
             (node && this.hoveredNode === node)) {
-                return;
-            }
+            return;
+        }
 
         (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
 
         this.highlightService.clear();
 
         if (node) {
-            this.highlightService.addNode(node);
-            node.neighbors.forEach((neighbor) => this.highlightService.addNode(neighbor));
+            this.highlightService.addNode(node.id);
+            node.neighbors.forEach((neighbor) => this.highlightService.addNode(neighbor.id));
 
             this.checkRelations(node.id, false);
         }
@@ -115,6 +115,21 @@ export class NodeService extends AbstractGraphService {
         this.hoveredNode = node ?? null;
         this.update();
     };
+
+    private inspectNode(node: Node | null): void {
+        this.inspecting = true;
+        (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
+
+        this.highlightService.clear();
+        if (node) {
+            this.hoveredNode = node;
+            this.highlightService.addNode(node.id);
+            node.neighbors.forEach((neighbor) => this.highlightService.addNode(neighbor.id));
+
+            this.checkRelations(node.id, true);
+        }
+        this.update();
+    }
 
     private checkRelations(id: string, recursive = false): void {
         const nodeLinks = this.plugin.globalGraph.clone().getLinksWithNode(id);

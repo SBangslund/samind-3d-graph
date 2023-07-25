@@ -23,8 +23,8 @@ export class HighlightService extends AbstractGraphService {
         this.links.add(link);
     }
 
-    public addNode(node: Node): void {
-        this.nodes.add(node.id);
+    public addNode(id: string): void {
+        this.nodes.add(id);
     }
 
     public addParent(id: string): void {

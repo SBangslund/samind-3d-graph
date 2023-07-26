@@ -135,7 +135,7 @@ export class NodeService extends AbstractGraphService {
         const nodeLinks = this.plugin.globalGraph.clone().getLinksWithNode(id);
 
         if (nodeLinks) {
-            nodeLinks.forEach((link: Link) => {
+            nodeLinks.reverse().forEach((link: Link) => {
                 if (!recursive) {
                     this.highlightService.addLink(link);
                 }

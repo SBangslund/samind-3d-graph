@@ -5,10 +5,10 @@ import { rgba } from "polished";
 import EventBus from "../../util/EventBus";
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 
-import { HighlightService } from "../graph/controllers/HighlightService"
-import { LinkService } from "../graph/controllers/LinkService"
-import { NodeService } from "../graph/controllers/NodeService"
-import { SettingsService } from "../graph/controllers/SettingsService"
+import { HighlightService } from "./services/HighlightService"
+import { LinkService } from "./services/LinkService"
+import { NodeService } from "./services/NodeService"
+import { SettingsService } from "./services/SettingsService"
 
 // Adapted from https://github.com/vasturiano/3d-force-graph/blob/master/example/highlight/index.html
 // D3.js 3D Force Graph
@@ -73,7 +73,7 @@ export class ForceGraph {
 		];
 		this.instance = ForceGraph3D({ extraRenderers: [new CSS2DRenderer] })(this.rootHtmlElement)
 			.graphData(this.getGraphData())
-			.nodeRelSize(this.plugin.getSettings().display.nodeSize / 2)
+			.nodeRelSize(this.plugin.getSettings().display.nodeSize)
 			.backgroundColor(rgba(0, 0, 0, 0.25))
 			.width(width)
 			.height(height);

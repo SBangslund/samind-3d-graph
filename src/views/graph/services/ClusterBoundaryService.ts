@@ -51,6 +51,11 @@ export class ClusterBoundaryService extends AbstractGraphService {
     private readonly boundaries: Map<string, BoundaryEntry> = new Map();
     private intervalId: number | null = null;
     private hoveredClusterId: string | null = null;
+    // an explicit, deliberate multi-cluster selection (e.g. "Show in graph"
+    // on a gap insight) - unlike hoveredClusterId, can hold more than one
+    // cluster, and takes precedence over the continuous hover tracking
+    // until cleared
+    private pinnedClusterIds: Set<string> = new Set();
     private opacityAnimationFrameId: number | null = null;
     // which cluster (if any) NodeService's clustering force should push
     // apart internally instead of pulling tight - read directly by
@@ -120,7 +125,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
     // used to be always-on regardless of distance, which read as too busy.
     private tickOpacity = (): void => {
         this.boundaries.forEach((entry) => {
-            if (this.hoveredClusterId === null) {
+            if (this.getActiveClusterIds().length === 0) {
                 let visibility = 0;
                 if (this.mouseScreenPos) {
                     const screenPos = this.instance.graph2ScreenCoords(
@@ -181,20 +186,45 @@ export class ClusterBoundaryService extends AbstractGraphService {
 
     // Called (cheaply) every frame by NodeService with whichever cluster the
     // cursor is currently nearest to. Only actually restyles when the value
-    // changes, so most calls are a no-op.
+    // changes, so most calls are a no-op. Ignored while clusters are
+    // pinned (e.g. via a gap insight's "Show in graph") - the pin takes
+    // precedence over continuous hover tracking until explicitly cleared.
     public setHoveredCluster(clusterId: string | null): void {
+        if (this.pinnedClusterIds.size > 0) return;
         if (clusterId === this.hoveredClusterId) return;
         this.hoveredClusterId = clusterId;
         this.applyHoverStyles();
     }
 
+    // Pins a set of clusters as highlighted (e.g. both sides of a gap
+    // insight), independent of - and taking priority over - the continuous
+    // mouse-driven hover. Pass an empty array to clear.
+    public setPinnedClusters(clusterIds: string[]): void {
+        this.pinnedClusterIds = new Set(clusterIds);
+        this.applyHoverStyles();
+    }
+
+    public getPinnedClusterIds(): string[] {
+        return Array.from(this.pinnedClusterIds);
+    }
+
+    // Whichever cluster(s) are currently highlighted, whatever the reason -
+    // an explicit pin if one is active, otherwise the continuous hover
+    // target. Used by NodeService to restrict label-hover-reveal to nodes
+    // actually within the highlighted region(s).
+    public getActiveClusterIds(): string[] {
+        if (this.pinnedClusterIds.size > 0) return Array.from(this.pinnedClusterIds);
+        return this.hoveredClusterId ? [this.hoveredClusterId] : [];
+    }
+
     private applyHoverStyles(): void {
+        const activeIds = this.getActiveClusterIds();
         this.boundaries.forEach((entry, clusterId) => {
-            const isHovered = clusterId === this.hoveredClusterId;
-            if (this.hoveredClusterId === null) {
+            const isActive = activeIds.includes(clusterId);
+            if (activeIds.length === 0) {
                 entry.targetBoxOpacity = BASE_BOX_OPACITY;
                 // label opacity: left to tickOpacity's proximity check instead
-            } else if (isHovered) {
+            } else if (isActive) {
                 entry.targetBoxOpacity = HOVER_BOX_OPACITY;
                 entry.label.element.style.opacity = String(HOVER_LABEL_OPACITY);
             } else {
@@ -233,27 +263,35 @@ export class ClusterBoundaryService extends AbstractGraphService {
         // tight) positions rather than the eventual exploded spread, which
         // is an acceptable trade for not fighting the user's own navigation.
         if (isExploding) {
-            this.zoomToCluster(clusterId);
+            // the cluster is about to grow toward EXPLODED_TARGET_RADIUS -
+            // inflate the target frame so it has headroom for that growth
+            // instead of ending up too tight (frame is computed from
+            // current, pre-explode positions)
+            this.focusOnClusters([clusterId], 1.8);
         }
     }
 
+    // Frames the camera around the current combined extent of one or more
+    // clusters - used for explode (a single cluster, with growth headroom)
+    // and for jumping to both clusters involved in a gap insight.
     // Not using the built-in zoomToFit here: its fitToBbox always measures
     // size relative to the world origin (0,0,0), not the bbox's own center
     // - fine for the whole graph, which sits centered near the origin via
     // the base forceCenter force, but wrong for an off-center subset like
-    // one cluster. It was measuring "how far is this cluster's farthest
-    // point from world center" instead of "how big is this cluster", so
+    // one or two clusters. It was measuring "how far is this the farthest
+    // point from world center" instead of "how big is this region", so
     // whichever cluster happened to sit farther from the origin got a more
     // zoomed-out camera regardless of its actual size - repeatedly exploding
     // different clusters made the zoom drift further out each time. This
     // reimplements the same framing math (mirrors fitToBbox in
-    // three-render-objects), just centered on the cluster's own centroid.
-    private zoomToCluster(clusterId: string): void {
+    // three-render-objects), just centered on the region's own centroid.
+    public focusOnClusters(clusterIds: string[], growthHeadroom = 1): void {
         const points: THREE.Vector3[] = [];
         this.graph.nodes.forEach((node) => {
             const rn = node as RuntimeNode;
             if (rn.x === undefined || rn.y === undefined || rn.z === undefined) return;
-            if (this.plugin.analysisService.getClusterId(node.id) === clusterId) {
+            const clusterId = this.plugin.analysisService.getClusterId(node.id);
+            if (clusterId && clusterIds.includes(clusterId)) {
                 points.push(new THREE.Vector3(rn.x, rn.y, rn.z));
             }
         });
@@ -262,16 +300,11 @@ export class ClusterBoundaryService extends AbstractGraphService {
         const box = new THREE.Box3().setFromPoints(points);
         const center = new THREE.Vector3();
         box.getCenter(center);
-        // frame is computed from current (pre-explode, still tight)
-        // positions, but the cluster is about to grow toward
-        // EXPLODED_TARGET_RADIUS - inflate the target size so the initial
-        // frame has headroom for that growth instead of ending up too tight
-        const GROWTH_HEADROOM = 1.8;
         const maxBoxSide = Math.max(
             Math.abs(box.max.x - center.x), Math.abs(box.min.x - center.x),
             Math.abs(box.max.y - center.y), Math.abs(box.min.y - center.y),
             Math.abs(box.max.z - center.z), Math.abs(box.min.z - center.z)
-        ) * 2 * GROWTH_HEADROOM;
+        ) * 2 * growthHeadroom;
 
         const camera = this.instance.camera() as THREE.PerspectiveCamera;
         const padding = 90;

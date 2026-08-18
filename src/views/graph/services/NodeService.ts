@@ -296,6 +296,11 @@ export class NodeService extends AbstractGraphService {
         // regardless of zoom level or how dense the cluster under the
         // cursor is.
         const candidates: { el: HTMLDivElement; screenDist: number }[] = [];
+        // while a cluster is highlighted (hover, title-hover, or a pinned
+        // gap-insight pair), label-hover-reveal is restricted to notes
+        // actually within it - revealing OTHER, dimmed notes' labels while
+        // exploring a highlighted cluster read as noisy/inconsistent
+        const activeClusterIds = this.clusterBoundaryService.getActiveClusterIds();
 
         for (const [nodeId, el] of this.labelElements) {
             const node = this.graph.getNodeById(nodeId);
@@ -308,6 +313,14 @@ export class NodeService extends AbstractGraphService {
             // NOT suppress the proximity-based label system - see styleLabel)
             if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) continue;
             if (this.highlightService.getNodeSize() > 0 && this.isNodeFocusActive()) continue;
+
+            if (activeClusterIds.length > 0) {
+                const nodeClusterId = this.plugin.analysisService.getClusterId(node.id);
+                if (!nodeClusterId || !activeClusterIds.includes(nodeClusterId)) {
+                    el.style.opacity = '0';
+                    continue;
+                }
+            }
 
             const runtimeNode = node as unknown as { x?: number; y?: number; z?: number };
             const { x, y, z } = runtimeNode;
@@ -341,11 +354,13 @@ export class NodeService extends AbstractGraphService {
             el.style.fontSize = ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem';
         });
 
-        // only a deliberate right-click pin should block this - not the
-        // ambient active-leaf-change tracking, which would otherwise
-        // silently disable cluster-hover the moment any note is open
+        // only a deliberate right-click pin (or a pinned gap-insight
+        // cluster pair) should block this - not the ambient active-leaf-
+        // change tracking, which would otherwise silently disable
+        // cluster-hover the moment any note is open
         const now = performance.now();
         if (!this.isPinnedByUser
+            && this.clusterBoundaryService.getPinnedClusterIds().length === 0
             && now - this.lastClusterHoverCheck >= CLUSTER_HOVER_CHECK_INTERVAL_MS) {
             this.lastClusterHoverCheck = now;
 
@@ -459,9 +474,39 @@ export class NodeService extends AbstractGraphService {
     // cluster the cursor is near), so both dim the rest of the boxes the
     // same way.
     private setHoveredClusterId(clusterId: string | null): void {
+        // stay frozen in sync with ClusterBoundaryService's own no-op while
+        // pinned, otherwise our local copy could drift from what it
+        // actually applied and skip a real update once the pin clears
+        if (this.clusterBoundaryService.getPinnedClusterIds().length > 0) return;
         if (clusterId === this.hoveredClusterId) return;
         this.hoveredClusterId = clusterId;
         this.clusterBoundaryService.setHoveredCluster(clusterId);
+    }
+
+    // Pins one or more clusters as highlighted - e.g. both sides of a gap
+    // insight's "Show in graph" - populating the SAME highlight set
+    // node-hover/cluster-hover use, so nodes, edges, boxes, and titles all
+    // dim/brighten together. Stays until a real node hover/inspect or a
+    // background click clears it.
+    public pinClusters(clusterIds: string[]): void {
+        this.highlightService.clear();
+        clusterIds.forEach((clusterId) => {
+            this.graph.nodes.forEach((n) => {
+                if (this.plugin.analysisService.getClusterId(n.id) === clusterId) {
+                    this.highlightService.addNode(n.id);
+                }
+            });
+        });
+        this.plugin.globalGraph.clone().links.forEach((link) => {
+            const sourceCluster = this.plugin.analysisService.getClusterId(link.source);
+            const targetCluster = this.plugin.analysisService.getClusterId(link.target);
+            if (sourceCluster && targetCluster
+                && clusterIds.includes(sourceCluster) && clusterIds.includes(targetCluster)) {
+                this.highlightService.addLink(link);
+            }
+        });
+        this.highlightService.update();
+        this.clusterBoundaryService.setPinnedClusters(clusterIds);
     }
 
     // True when a specific node is genuinely hovered or inspected (as
@@ -476,6 +521,7 @@ export class NodeService extends AbstractGraphService {
     private onRemove(): void {
         this.inspecting = false;
         this.isPinnedByUser = false;
+        this.clusterBoundaryService.setPinnedClusters([]);
         this.highlightService.clear();
         this.setHoveredClusterId(null);
         this.update();
@@ -502,6 +548,10 @@ export class NodeService extends AbstractGraphService {
         (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
 
         this.highlightService.clear();
+        // a real node hover/inspect always wins over a pinned gap-insight
+        // pair - clear the pin explicitly, since setHoveredClusterId() below
+        // would otherwise be silently ignored by the pin's precedence guard
+        this.clusterBoundaryService.setPinnedClusters([]);
         // the box layer highlights whichever cluster is relevant right now -
         // the hovered node's own cluster, same as cluster-hover would - so
         // it dims/brightens consistently no matter which interaction triggered it
@@ -531,6 +581,11 @@ export class NodeService extends AbstractGraphService {
         (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
 
         this.highlightService.clear();
+        // only a deliberate right-click pin should clear a pinned gap pair -
+        // the ambient active-leaf-change path (isPinnedByUser false) must
+        // not silently disrupt it, same reasoning as everywhere else this
+        // distinction is made
+        if (isPinnedByUser) this.clusterBoundaryService.setPinnedClusters([]);
         this.setHoveredClusterId(node ? this.plugin.analysisService.getClusterId(node.id) : null);
         if (node) {
             this.hoveredNode = node;

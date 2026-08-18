@@ -36,7 +36,8 @@ export class Graph3dView extends ItemView {
 			const settings = new GraphSettingsView(
 				this.plugin.settingsState,
 				this.plugin.theme,
-				this.plugin.analysisService
+				this.plugin.analysisService,
+				(clusterIds) => this.forceGraph.focusOnClusters(clusterIds)
 			);
 			viewContent.appendChild(settings);
 			// the pane's layout isn't finalized yet at this point (it was just

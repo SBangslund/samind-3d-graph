@@ -116,6 +116,11 @@ export class ForceGraph {
 		return this.instance;
 	}
 
+	public focusOnClusters(clusterIds: string[]): void {
+		this.clusterBoundaryService?.focusOnClusters(clusterIds);
+		this.nodeService?.pinClusters(clusterIds);
+	}
+
 	public destroy(): void {
 		this.nodeService?.destroy();
 		this.clusterBoundaryService?.destroy();

@@ -110,3 +110,71 @@
 	color: var(--text-muted);
 	padding: 4px 8px;
 }
+
+.graph-3d-view .gap-insights-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 4px 8px;
+}
+
+.graph-3d-view .gap-insight-card {
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 8px;
+	background: var(--background-secondary);
+}
+
+.graph-3d-view .gap-insight-header {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 4px;
+	margin-bottom: 6px;
+}
+
+.graph-3d-view .gap-insight-cluster-badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.7rem;
+	font-weight: 600;
+}
+
+.graph-3d-view .gap-insight-swatch {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	display: inline-block;
+	flex-shrink: 0;
+}
+
+.graph-3d-view .gap-insight-arrow {
+	color: var(--text-faint);
+	font-size: 0.7rem;
+}
+
+.graph-3d-view .gap-insight-text {
+	font-size: 0.75rem;
+	color: var(--text-normal);
+	margin: 0 0 6px 0;
+	line-height: 1.4;
+}
+
+.graph-3d-view .gap-insight-question {
+	font-size: 0.72rem;
+	font-style: italic;
+	color: var(--text-accent);
+	margin: 0 0 6px 0;
+	line-height: 1.4;
+}
+
+.graph-3d-view .gap-insight-show-button {
+	font-size: 0.7rem;
+}
+
+.graph-3d-view .gap-insights-empty {
+	font-size: 0.7rem;
+	color: var(--text-muted);
+	padding: 4px 8px;
+}

@@ -14,6 +14,7 @@ import GraphSettings from "src/settings/GraphSettings";
 import ObsidianTheme from "src/util/ObsidianTheme";
 import { AnalysisService } from "src/analysis/AnalysisService";
 import ClusterLegendView from "./categories/ClusterLegendView";
+import GapInsightsView from "./categories/GapInsightsView";
 import { defineCustomElement } from "src/util/defineCustomElement";
 
 export class GraphSettingsView extends HTMLDivElement {
@@ -25,16 +26,19 @@ export class GraphSettingsView extends HTMLDivElement {
 	private readonly settingsState: State<GraphSettings>;
 	private readonly theme: ObsidianTheme;
 	private readonly analysisService: AnalysisService;
+	private readonly onFocusClusters: (clusterIds: string[]) => void;
 
 	constructor(
 		settingsState: State<GraphSettings>,
 		theme: ObsidianTheme,
-		analysisService: AnalysisService
+		analysisService: AnalysisService,
+		onFocusClusters: (clusterIds: string[]) => void
 	) {
 		super();
 		this.settingsState = settingsState;
 		this.theme = theme;
 		this.analysisService = analysisService;
+		this.onFocusClusters = onFocusClusters;
 	}
 
 	async connectedCallback() {
@@ -52,6 +56,7 @@ export class GraphSettingsView extends HTMLDivElement {
 		);
 
 		this.appendClusterLegend();
+		this.appendGapInsights();
 		this.appendSetting(
 			this.settingsState.createSubState("value.filters", FilterSettings),
 			"Filters",
@@ -135,6 +140,18 @@ export class GraphSettingsView extends HTMLDivElement {
 		const item = new TreeItem(header, [
 			(containerEl: HTMLElement) =>
 				ClusterLegendView(this.analysisService, containerEl),
+		]);
+		item.classList.add("is-collapsed");
+		this.graphControls.append(item);
+	}
+
+	private appendGapInsights() {
+		const header = document.createElement("header");
+		header.classList.add("graph-control-section-header");
+		header.innerHTML = "Gap Insights (AI Analysis)";
+		const item = new TreeItem(header, [
+			(containerEl: HTMLElement) =>
+				GapInsightsView(this.analysisService, this.onFocusClusters, containerEl),
 		]);
 		item.classList.add("is-collapsed");
 		this.graphControls.append(item);

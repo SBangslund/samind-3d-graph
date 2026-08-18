@@ -21,6 +21,15 @@ const DIM_LABEL_OPACITY = 0.08;
 // frame - the box material isn't a DOM element, so CSS transitions can't
 // smooth it; this ease-toward-target loop does the same job by hand
 const OPACITY_LERP_FACTOR = 0.12;
+// how close (screen px) the mouse needs to be before an idle cluster title
+// reveals itself - deliberately much larger than node labels' radius (see
+// MOUSE_PROXIMITY_RADIUS_PX in NodeService): there are far fewer clusters
+// than notes, so they're worth noticing from farther away, and titles were
+// previously always-on regardless of distance, which read as too busy
+const CLUSTER_TITLE_REVEAL_RADIUS_PX = 450;
+
+const clamp = (value: number, min: number, max: number): number =>
+    Math.min(max, Math.max(min, value));
 
 type RuntimeNode = Node & { x?: number; y?: number; z?: number };
 
@@ -53,6 +62,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
     // a title drives the full node/edge/box highlight, not just the box
     private titleHoveredClusterId: string | null = null;
     private readonly raycaster = new THREE.Raycaster();
+    private mouseScreenPos: { x: number; y: number } | null = null;
 
     constructor(
         instance: ForceGraph3DInstance,
@@ -66,17 +76,31 @@ export class ClusterBoundaryService extends AbstractGraphService {
         this.rebuild();
         this.intervalId = window.setInterval(() => this.rebuild(), REBUILD_INTERVAL_MS);
         this.opacityAnimationFrameId = requestAnimationFrame(this.tickOpacity);
-        this.instance.renderer().domElement.addEventListener('dblclick', this.onCanvasDoubleClick);
+        const rendererEl = this.instance.renderer().domElement;
+        rendererEl.addEventListener('dblclick', this.onCanvasDoubleClick);
+        rendererEl.addEventListener('mousemove', this.onMouseMove);
+        rendererEl.addEventListener('mouseleave', this.onMouseLeave);
     }
 
     public destroy(): void {
         if (this.intervalId !== null) window.clearInterval(this.intervalId);
         if (this.opacityAnimationFrameId !== null) cancelAnimationFrame(this.opacityAnimationFrameId);
-        this.instance.renderer().domElement.removeEventListener('dblclick', this.onCanvasDoubleClick);
+        const rendererEl = this.instance.renderer().domElement;
+        rendererEl.removeEventListener('dblclick', this.onCanvasDoubleClick);
+        rendererEl.removeEventListener('mousemove', this.onMouseMove);
+        rendererEl.removeEventListener('mouseleave', this.onMouseLeave);
         const scene = this.instance.scene();
         this.boundaries.forEach((entry) => this.disposeEntry(scene, entry));
         this.boundaries.clear();
     }
+
+    private readonly onMouseMove = (event: MouseEvent): void => {
+        const rect = this.instance.renderer().domElement.getBoundingClientRect();
+        this.mouseScreenPos = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+    private readonly onMouseLeave = (): void => {
+        this.mouseScreenPos = null;
+    };
 
     // Double-clicking anywhere inside a cluster's box explodes it, not just
     // its small title label - much more discoverable, and reuses the same
@@ -92,8 +116,28 @@ export class ClusterBoundaryService extends AbstractGraphService {
 
     // Eases each box's material opacity toward its current target every
     // frame, since transparent WebGL materials don't get CSS transitions.
+    // Also drives idle-state box/title opacity by mouse proximity - both
+    // used to be always-on regardless of distance, which read as too busy.
     private tickOpacity = (): void => {
         this.boundaries.forEach((entry) => {
+            if (this.hoveredClusterId === null) {
+                let visibility = 0;
+                if (this.mouseScreenPos) {
+                    const screenPos = this.instance.graph2ScreenCoords(
+                        entry.box.position.x, entry.box.position.y, entry.box.position.z
+                    );
+                    const dx = screenPos.x - this.mouseScreenPos.x;
+                    const dy = screenPos.y - this.mouseScreenPos.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    visibility = clamp(1 - dist / CLUSTER_TITLE_REVEAL_RADIUS_PX, 0, 1);
+                }
+                entry.targetBoxOpacity = visibility * BASE_BOX_OPACITY;
+                entry.label.element.style.opacity = (visibility * BASE_LABEL_OPACITY).toFixed(2);
+            }
+            // when a cluster IS hover-highlighted, applyHoverStyles already
+            // set the right box/title opacity (hovered/dimmed) - leave it
+            // alone here rather than fighting over it every frame
+
             const material = entry.box.material as THREE.LineDashedMaterial;
             material.opacity += (entry.targetBoxOpacity - material.opacity) * OPACITY_LERP_FACTOR;
         });
@@ -149,7 +193,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
             const isHovered = clusterId === this.hoveredClusterId;
             if (this.hoveredClusterId === null) {
                 entry.targetBoxOpacity = BASE_BOX_OPACITY;
-                entry.label.element.style.opacity = String(BASE_LABEL_OPACITY);
+                // label opacity: left to tickOpacity's proximity check instead
             } else if (isHovered) {
                 entry.targetBoxOpacity = HOVER_BOX_OPACITY;
                 entry.label.element.style.opacity = String(HOVER_LABEL_OPACITY);
@@ -297,7 +341,9 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 const material = new THREE.LineDashedMaterial({
                     color: new THREE.Color(cluster.color),
                     transparent: true,
-                    opacity: BASE_BOX_OPACITY,
+                    // hidden by default; tickOpacity reveals it based on
+                    // mouse proximity once idle
+                    opacity: 0,
                     dashSize: 6,
                     gapSize: 4,
                 });
@@ -316,7 +362,9 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 labelEl.className = 'cluster-boundary-label';
                 labelEl.textContent = cluster.label;
                 labelEl.style.color = cluster.color;
-                labelEl.style.opacity = String(BASE_LABEL_OPACITY);
+                // hidden by default; tickOpacity reveals it based on mouse
+                // proximity once idle
+                labelEl.style.opacity = '0';
                 // double-click, not single: these labels are small, faint,
                 // and there are many of them scattered around the scene, so
                 // a single click was too easy to trigger by accident while

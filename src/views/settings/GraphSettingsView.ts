@@ -3,6 +3,8 @@ import DisplaySettingsView from "./categories/DisplaySettingsView";
 import { FilterSettings } from "../../settings/categories/FilterSettings";
 import { GroupSettings } from "../../settings/categories/GroupSettings";
 import { DisplaySettings } from "../../settings/categories/DisplaySettings";
+import { ClusterPhysicsSettings } from "../../settings/categories/ClusterPhysicsSettings";
+import ClusterPhysicsSettingsView from "./categories/ClusterPhysicsSettingsView";
 import { ExtraButtonComponent } from "obsidian";
 import State, { StateChange } from "../../util/State";
 import EventBus from "../../util/EventBus";
@@ -64,6 +66,11 @@ export class GraphSettingsView extends HTMLDivElement {
 			this.settingsState.createSubState("value.display", DisplaySettings),
 			"Display",
 			DisplaySettingsView
+		);
+		this.appendSetting(
+			this.settingsState.createSubState("value.clusterPhysics", ClusterPhysicsSettings),
+			"Cluster Physics",
+			ClusterPhysicsSettingsView
 		);
 		this.initListeners();
 		this.toggleCollapsed(this.isCollapsedState.value);

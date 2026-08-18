@@ -11,6 +11,12 @@ export class SettingsService extends AbstractGraphService {
 			this.instance.linkDirectionalParticleWidth(
 				this.plugin.getSettings().display.particleSize
 			);
+		} else if (data.currentPath.startsWith("clusterPhysics.")) {
+			// the cluster force reads these values fresh every tick, but the
+			// simulation itself has likely already cooled down - reheat so
+			// a slider change is immediately visible instead of silently
+			// waiting for the next explode/collapse to pick it up
+			this.instance.d3ReheatSimulation();
 		}
 
 		this.instance.refresh(); // other settings only need a refresh

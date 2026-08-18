@@ -17,13 +17,6 @@ const MOUSE_PROXIMITY_RADIUS_PX = 220;
 // many nodes fall within the proximity radius (keeps zoomed-out/dense
 // clusters readable instead of piling up overlapping text)
 const MAX_VISIBLE_LABELS = 6;
-// how close (screen px) the mouse needs to be to the *nearest* node before
-// we consider its whole cluster "hovered"
-const CLUSTER_HOVER_RADIUS_PX = 90;
-// how much closer a different cluster's nearest node must be, versus the
-// currently-hovered cluster's nearest node, before switching - prevents
-// flapping back and forth right at a boundary between two clusters
-const CLUSTER_HOVER_HYSTERESIS_PX = 40;
 // alpha used to fade nodes outside whatever's currently focused - the
 // hovered/inspected node's neighbor set, or (separately) the hovered
 // cluster. Shared so both interactions dim by the same amount.
@@ -41,6 +34,16 @@ export class NodeService extends AbstractGraphService {
 
     private hoveredNode: Node | null = null;
     private inspecting: boolean;
+    // true only when the user deliberately right-clicked a node to pin it -
+    // as opposed to inspectNode() also being called ambiently whenever
+    // active-leaf-change fires (e.g. just from clicking a node to open its
+    // file, or switching to any note elsewhere while the graph stays open).
+    // That ambient case must NOT permanently block casual hover/cluster-hover
+    // the way a deliberate pin should - it used to, since both went through
+    // the same `inspecting` flag, making hover-highlighting quietly stop
+    // working the moment any note was open (i.e. almost always) until an
+    // explicit background click.
+    private isPinnedByUser = false;
 
     // idle-state labels, kept in sync so the visibility loop can update them
     // in place instead of recreating DOM nodes every frame
@@ -102,6 +105,14 @@ export class NodeService extends AbstractGraphService {
         // the sudden alpha=1 reheat on explode toggle - ease in rather than
         // snap; works alongside the per-tick force magnitude caps below
         this.instance.d3VelocityDecay(0.55);
+        // d3AlphaMin defaults to 0, which disables the "alpha has decayed
+        // enough, we're settled" stop condition entirely - the simulation
+        // then only ever stops via the 15s cooldownTime hard cutoff, no
+        // matter how quickly it visually settles. A small positive value
+        // lets it recognize settling naturally (a few seconds, typically),
+        // which onEngineStop-driven features (e.g. zoom-after-explode) need
+        // to fire at a reasonable time instead of always waiting the full 15s.
+        this.instance.d3AlphaMin(0.01);
 
         const rendererEl = this.instance.renderer().domElement;
         rendererEl.addEventListener('mousemove', this.onMouseMove);
@@ -121,22 +132,21 @@ export class NodeService extends AbstractGraphService {
     // actual resting size: nodes already within it are left to the normal
     // link/charge forces, only outliers get reeled back in.
     private createClusterForce() {
-        const CLUSTER_FORCE_STRENGTH = 4.5;
-        const CLUSTER_TARGET_RADIUS = 65;
-        // the exploded cluster is contained within a much bigger radius
-        // (loose leash, not a tight pull) while EXPLODE_REPULSION_STRENGTH
-        // below pushes its members apart from each other so they actually
-        // spread out to fill that space, rather than just drifting loose
-        const EXPLODED_TARGET_RADIUS = 420;
-        const EXPLODE_REPULSION_STRENGTH = 6000;
-        // both forces below are otherwise unbounded (linear spring / inverse
-        // square), so a node that's very far from centroid, or two exploded
-        // members that are still very close together, get a huge one-tick
-        // velocity kick instead of a gentle pull - capping the per-tick
-        // force magnitude turns that into a steady terminal-velocity-style
-        // approach instead of a violent snap
+        // both the intra-cluster pull and inter-cluster push below are
+        // otherwise unbounded (linear spring / inverse square), so a node
+        // very far from centroid, two exploded members still close
+        // together, or two cluster centroids right on top of each other
+        // get a huge one-tick velocity kick instead of a gentle nudge -
+        // capping the per-tick force magnitude turns that into a steady
+        // terminal-velocity-style approach instead of a violent snap
         const MAX_CLUSTER_FORCE = 12;
         const MAX_EXPLODE_FORCE = 12;
+        // higher than the other two caps on purpose: inter-cluster shortfall
+        // can be up to interClusterSeparation (~250+), a much bigger range
+        // than the ~65-180 radii the other forces operate over. At 12, the
+        // strength slider saturated this cap for almost the entire distance
+        // even at low settings, making it feel like it did nothing.
+        const MAX_INTER_CLUSTER_FORCE = 30;
         let nodesRef: Node[] = [];
 
         type RuntimeNode = Node & {
@@ -145,6 +155,9 @@ export class NodeService extends AbstractGraphService {
         };
 
         const force = (alpha: number) => {
+            // read fresh each tick so the settings sliders apply live
+            const physics = this.plugin.getSettings().clusterPhysics;
+
             const centroids = new Map<string, { x: number; y: number; z: number; count: number }>();
 
             nodesRef.forEach((n) => {
@@ -174,17 +187,38 @@ export class NodeService extends AbstractGraphService {
                 if (!centroid) return;
 
                 const isExploded = clusterId === explodedClusterId;
-                const targetRadius = isExploded ? EXPLODED_TARGET_RADIUS : CLUSTER_TARGET_RADIUS;
+                const targetRadius = isExploded ? physics.explodedTargetRadius : physics.clusterTargetRadius;
 
                 const dx = rn.x - centroid.x, dy = rn.y - centroid.y, dz = rn.z - centroid.z;
                 const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
                 const excess = dist - targetRadius;
                 if (excess > 0) {
-                    const forceMagnitude = Math.min(excess * CLUSTER_FORCE_STRENGTH, MAX_CLUSTER_FORCE) * alpha;
+                    const forceMagnitude = Math.min(excess * physics.clusterForceStrength, MAX_CLUSTER_FORCE) * alpha;
                     const pull = forceMagnitude / dist;
                     rn.vx = (rn.vx ?? 0) - dx * pull;
                     rn.vy = (rn.vy ?? 0) - dy * pull;
                     rn.vz = (rn.vz ?? 0) - dz * pull;
+                }
+
+                // push away from every OTHER cluster's centroid, if closer
+                // than the configured separation - keeps different clusters
+                // from drifting into/through each other
+                if (physics.interClusterRepulsionStrength > 0) {
+                    centroids.forEach((otherCentroid, otherClusterId) => {
+                        if (otherClusterId === clusterId) return;
+                        const odx = rn.x! - otherCentroid.x, ody = rn.y! - otherCentroid.y, odz = rn.z! - otherCentroid.z;
+                        const odist = Math.sqrt(odx * odx + ody * ody + odz * odz) || 1;
+                        const shortfall = physics.interClusterSeparation - odist;
+                        if (shortfall <= 0) return;
+                        const forceMagnitude = Math.min(
+                            shortfall * physics.interClusterRepulsionStrength,
+                            MAX_INTER_CLUSTER_FORCE
+                        ) * alpha;
+                        const push = forceMagnitude / odist;
+                        rn.vx = (rn.vx ?? 0) + odx * push;
+                        rn.vy = (rn.vy ?? 0) + ody * push;
+                        rn.vz = (rn.vz ?? 0) + odz * push;
+                    });
                 }
             });
 
@@ -205,7 +239,10 @@ export class NodeService extends AbstractGraphService {
                         const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
                         const distSq = Math.max(dx * dx + dy * dy + dz * dz, 1);
                         const dist = Math.sqrt(distSq);
-                        const repel = Math.min((EXPLODE_REPULSION_STRENGTH * alpha) / distSq, MAX_EXPLODE_FORCE);
+                        const repel = Math.min(
+                            (physics.explodeRepulsionStrength * alpha) / distSq,
+                            MAX_EXPLODE_FORCE
+                        );
                         const ux = dx / dist, uy = dy / dist, uz = dz / dist;
 
                         a.vx = (a.vx ?? 0) - ux * repel;
@@ -259,17 +296,7 @@ export class NodeService extends AbstractGraphService {
         // regardless of zoom level or how dense the cluster under the
         // cursor is.
         const candidates: { el: HTMLDivElement; screenDist: number }[] = [];
-        let closestNodeRef: Node | null = null;
-        let closestNodeDist = Infinity;
-        // closest distance among members of whichever cluster is CURRENTLY
-        // hovered, tracked separately so we can require a clear margin
-        // before switching away from it (plain distance-throttling alone
-        // still let the choice flap every tick right at a boundary)
-        let currentClusterMinDist = Infinity;
 
-        // a plain for-of loop here (not .forEach) so the closestNodeRef/
-        // closestNodeDist reassignments below stay in the same control-flow
-        // scope as their later reads
         for (const [nodeId, el] of this.labelElements) {
             const node = this.graph.getNodeById(nodeId);
             if (!node) {
@@ -296,20 +323,6 @@ export class NodeService extends AbstractGraphService {
             const sdy = screenPos.y - this.mouseScreenPos.y;
             const screenDist = Math.sqrt(sdx * sdx + sdy * sdy);
 
-            // tracked independent of the (tighter) label reveal radius, so
-            // we can tell which cluster the cursor is generally near even
-            // when it's not quite close enough to any single label
-            if (screenDist < closestNodeDist) {
-                closestNodeDist = screenDist;
-                closestNodeRef = node;
-            }
-            if (this.hoveredClusterId !== null && screenDist < currentClusterMinDist) {
-                const nodeClusterId = this.plugin.analysisService.getClusterId(node.id);
-                if (nodeClusterId === this.hoveredClusterId) {
-                    currentClusterMinDist = screenDist;
-                }
-            }
-
             if (screenDist > MOUSE_PROXIMITY_RADIUS_PX) {
                 el.style.opacity = '0';
                 continue;
@@ -328,40 +341,22 @@ export class NodeService extends AbstractGraphService {
             el.style.fontSize = ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem';
         });
 
-        // while a specific node is genuinely focused (hover or inspect),
-        // its cluster highlight is driven directly by onNodeHover/
-        // inspectNode instead - don't let this proximity-based check fight
-        // over hoveredClusterId with that
+        // only a deliberate right-click pin should block this - not the
+        // ambient active-leaf-change tracking, which would otherwise
+        // silently disable cluster-hover the moment any note is open
         const now = performance.now();
-        if (!this.inspecting && this.hoveredNode === null
+        if (!this.isPinnedByUser
             && now - this.lastClusterHoverCheck >= CLUSTER_HOVER_CHECK_INTERVAL_MS) {
             this.lastClusterHoverCheck = now;
 
             const titleHoveredClusterId = this.clusterBoundaryService.getTitleHoveredClusterId();
-
-            let newHoveredClusterId: string | null;
-            if (titleHoveredClusterId !== null) {
-                // directly hovering a cluster's title takes priority over
-                // the proximity guess - it's an explicit, unambiguous signal
-                newHoveredClusterId = titleHoveredClusterId;
-            } else if (closestNodeRef === null) {
-                newHoveredClusterId = null;
-            } else {
-                const globalClosestClusterId = this.plugin.analysisService.getClusterId(closestNodeRef.id);
-                const stayOnCurrent = this.hoveredClusterId !== null
-                    && globalClosestClusterId !== this.hoveredClusterId
-                    && currentClusterMinDist <= CLUSTER_HOVER_RADIUS_PX
-                    && closestNodeDist + CLUSTER_HOVER_HYSTERESIS_PX >= currentClusterMinDist;
-                if (stayOnCurrent) {
-                    // right at a boundary the "nearest node" can alternate
-                    // between two clusters from one check to the next; stick
-                    // with the current cluster unless the new one is clearly
-                    // closer, instead of flapping back and forth
-                    newHoveredClusterId = this.hoveredClusterId;
-                } else {
-                    newHoveredClusterId = closestNodeDist <= CLUSTER_HOVER_RADIUS_PX ? globalClosestClusterId : null;
-                }
-            }
+            // directly hovering a cluster's title takes priority over the
+            // raycast - it's an explicit, unambiguous signal
+            const newHoveredClusterId = titleHoveredClusterId !== null
+                ? titleHoveredClusterId
+                : this.mouseScreenPos
+                    ? this.clusterBoundaryService.getClusterAtScreenPosition(this.mouseScreenPos.x, this.mouseScreenPos.y)
+                    : null;
 
             if (newHoveredClusterId !== this.hoveredClusterId) {
                 this.setHoveredClusterId(newHoveredClusterId);
@@ -480,13 +475,14 @@ export class NodeService extends AbstractGraphService {
 
     private onRemove(): void {
         this.inspecting = false;
+        this.isPinnedByUser = false;
         this.highlightService.clear();
         this.setHoveredClusterId(null);
         this.update();
     }
 
     private onNodeRightClick(node: Node | null) {
-        this.inspectNode(node);
+        this.inspectNode(node, true);
     }
 
     private onNodeHover(node: Node | null) {
@@ -494,8 +490,10 @@ export class NodeService extends AbstractGraphService {
         // that set can also be populated by cluster-hover, and the raycast
         // reporting "no node under cursor" (very common while idly moving
         // the mouse) must not clear a cluster highlight that has nothing to
-        // do with node-hover
-        if (this.inspecting ||
+        // do with node-hover. Gated on isPinnedByUser (not inspecting): a
+        // deliberate right-click pin should block casual hover, but the
+        // ambient active-leaf-change tracking should not.
+        if (this.isPinnedByUser ||
             (!node && this.hoveredNode === null) ||
             (node && this.hoveredNode === node)) {
             return;
@@ -527,8 +525,9 @@ export class NodeService extends AbstractGraphService {
         this.update();
     };
 
-    private inspectNode(node: Node | null): void {
+    private inspectNode(node: Node | null, isPinnedByUser = false): void {
         this.inspecting = true;
+        this.isPinnedByUser = isPinnedByUser;
         (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
 
         this.highlightService.clear();

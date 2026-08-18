@@ -59,7 +59,8 @@
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
 	opacity: 0.35;
-	pointer-events: none;
+	pointer-events: auto;
+	cursor: pointer;
 	white-space: nowrap;
 	text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 	transition: opacity 0.25s ease-out;

@@ -32,6 +32,7 @@ export class NodeService extends AbstractGraphService {
         });
         this.instance
             .nodeColor((node: Node) => this.getNodeColor(node))
+            .nodeVal((node: Node) => this.getNodeVal(node))
             .nodeOpacity(.85)
             .nodeVisibility((node: Node) => this.isNodeVisible(node))
             .nodeThreeObject((node: Node) => this.createNodeThreeObject(node))
@@ -150,16 +151,31 @@ export class NodeService extends AbstractGraphService {
         }
     }
 
+    private getNodeVal(node: Node): number {
+        const importance = this.plugin.analysisService.getImportance(node.id);
+        // importance 0-1 maps onto 0.5x-2.5x the base node size
+        return importance !== null ? node.val * (0.5 + importance * 2) : node.val;
+    }
+
     private isNodeVisible(node: Node): boolean {
         return this.plugin.getSettings().filters.doShowOrphans || node.links.length > 0;
     };
 
     private getNodeColor(node: Node): string {
         let color = this.plugin.theme.textMuted;
+        let matchedGroup = false;
         this.plugin.getSettings().groups.groups.forEach((group) => {
             // multiple groups -> last match wins
-            if (NodeGroup.matches(group.query, node)) color = group.color;
+            if (NodeGroup.matches(group.query, node)) {
+                color = group.color;
+                matchedGroup = true;
+            }
         });
+        // fall back to AI-generated cluster color when no manual group matches
+        if (!matchedGroup) {
+            const clusterColor = this.plugin.analysisService.getClusterColor(node.id);
+            if (clusterColor) color = clusterColor;
+        }
         if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) {
             return color;
         }

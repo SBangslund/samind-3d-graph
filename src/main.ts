@@ -7,6 +7,7 @@ import ObsidianTheme from "./util/ObsidianTheme";
 import EventBus from "./util/EventBus";
 import { ResolvedLinkCache } from "./graph/Link";
 import shallowCompare from "./util/ShallowCompare";
+import { AnalysisService } from "./analysis/AnalysisService";
 
 export default class Graph3dPlugin extends Plugin {
 	_resolvedCache: ResolvedLinkCache;
@@ -21,6 +22,7 @@ export default class Graph3dPlugin extends Plugin {
 	// Other properties
 	public globalGraph: Graph;
 	public theme: ObsidianTheme;
+	public analysisService: AnalysisService;
 	// Graphs that are waiting for cache to be ready
 	private queuedGraphs: Graph3dView[] = [];
 	private callbackUnregisterHandles: (() => void)[] = [];
@@ -38,7 +40,22 @@ export default class Graph3dPlugin extends Plugin {
 			name: "Open Local 3D Graph",
 			callback: this.openLocalGraph,
 		});
+		this.addCommand({
+			id: "reload-graph-analysis",
+			name: "Reload AI Graph Analysis",
+			callback: this.reloadAnalysis,
+		});
 	}
+
+	private reloadAnalysis = async () => {
+		await this.analysisService.load();
+		EventBus.trigger("graph-changed");
+		new Notice(
+			this.analysisService.hasAnalysis()
+				? "Graph analysis reloaded"
+				: "No analysis found at .samind-3d-graph/analysis.json"
+		);
+	};
 
 	private async init() {
 		await this.initStates();
@@ -49,6 +66,8 @@ export default class Graph3dPlugin extends Plugin {
 		const settings = await this.loadSettings();
 		this.settingsState = new State<GraphSettings>(settings);
 		this.theme = new ObsidianTheme(this.app.workspace.containerEl);
+		this.analysisService = new AnalysisService(this.app);
+		await this.analysisService.load();
 		this.cacheIsReady.value =
 			this.app.metadataCache.resolvedLinks !== undefined;
 		this.onGraphCacheChanged();

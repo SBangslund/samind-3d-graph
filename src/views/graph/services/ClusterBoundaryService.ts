@@ -7,22 +7,29 @@ import Graph from "src/graph/Graph";
 import Node from "src/graph/Node";
 
 const REBUILD_INTERVAL_MS = 600;
-const BOX_PADDING = 24;
-// below this many members, a box doesn't read as a meaningful region
+const SPHERE_PADDING = 20;
+// low segment counts on purpose: a coarse geodesic wireframe reads as a
+// soft "region" without turning into a dense, cluttered mesh of lines
+const SPHERE_WIDTH_SEGMENTS = 10;
+const SPHERE_HEIGHT_SEGMENTS = 6;
+// below this many members, a sphere doesn't read as a meaningful region
 const MIN_CLUSTER_SIZE = 2;
 
 type RuntimeNode = Node & { x?: number; y?: number; z?: number };
 
 interface BoundaryEntry {
-    box: THREE.LineSegments;
+    sphere: THREE.Mesh;
     label: CSS2DObject;
 }
 
-// Draws a dashed bounding box + floating title around each AI cluster's
+// Draws a wireframe sphere + floating title around each AI cluster's
 // current spatial extent, so the clustering force's effect is legible even
-// before you've spotted the color pattern. Rebuilt on an interval (not
-// every frame) since node positions settle gradually and a tight per-frame
-// rebuild would be wasted work.
+// before you've spotted the color pattern. A sphere matches the roughly
+// isotropic shape the clustering force actually produces (it pulls members
+// toward a centroid in all directions), unlike a bounding box which wastes
+// visual space on empty corners. Rebuilt on an interval (not every frame)
+// since node positions settle gradually and a full rebuild is cheap but
+// still unnecessary work at 60fps.
 export class ClusterBoundaryService extends AbstractGraphService {
     private readonly boundaries: Map<string, BoundaryEntry> = new Map();
     private intervalId: number | null = null;
@@ -48,10 +55,10 @@ export class ClusterBoundaryService extends AbstractGraphService {
     }
 
     private disposeEntry(scene: THREE.Scene, entry: BoundaryEntry): void {
-        scene.remove(entry.box);
+        scene.remove(entry.sphere);
         scene.remove(entry.label);
-        entry.box.geometry.dispose();
-        (entry.box.material as THREE.Material).dispose();
+        entry.sphere.geometry.dispose();
+        (entry.sphere.material as THREE.Material).dispose();
     }
 
     private rebuild = (): void => {
@@ -82,30 +89,26 @@ export class ClusterBoundaryService extends AbstractGraphService {
             if (!cluster) return;
             seenClusterIds.add(clusterId);
 
-            const box3 = new THREE.Box3().setFromPoints(points);
-            box3.expandByScalar(BOX_PADDING);
-            const size = new THREE.Vector3();
-            box3.getSize(size);
-            const center = new THREE.Vector3();
-            box3.getCenter(center);
+            const boundingSphere = new THREE.Sphere().setFromPoints(points);
+            const radius = boundingSphere.radius + SPHERE_PADDING;
 
-            const boxGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-            const edgesGeometry = new THREE.EdgesGeometry(boxGeometry);
-            boxGeometry.dispose();
+            const geometry = new THREE.SphereGeometry(
+                radius,
+                SPHERE_WIDTH_SEGMENTS,
+                SPHERE_HEIGHT_SEGMENTS
+            );
 
             let entry = this.boundaries.get(clusterId);
             if (!entry) {
-                const material = new THREE.LineDashedMaterial({
+                const material = new THREE.MeshBasicMaterial({
                     color: new THREE.Color(cluster.color),
+                    wireframe: true,
                     transparent: true,
-                    opacity: 0.35,
-                    dashSize: 6,
-                    gapSize: 4,
+                    opacity: 0.22,
                 });
-                const line = new THREE.LineSegments(edgesGeometry, material);
-                line.computeLineDistances();
-                line.raycast = () => { /* never intercept pointer events */ };
-                line.renderOrder = -1;
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.raycast = () => { /* never intercept pointer events */ };
+                mesh.renderOrder = -1;
 
                 const labelEl = document.createElement('div');
                 labelEl.className = 'cluster-boundary-label';
@@ -113,18 +116,21 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 labelEl.style.color = cluster.color;
                 const label = new CSS2DObject(labelEl);
 
-                scene.add(line);
+                scene.add(mesh);
                 scene.add(label);
-                entry = { box: line, label };
+                entry = { sphere: mesh, label };
                 this.boundaries.set(clusterId, entry);
             } else {
-                entry.box.geometry.dispose();
-                entry.box.geometry = edgesGeometry;
-                entry.box.computeLineDistances();
+                entry.sphere.geometry.dispose();
+                entry.sphere.geometry = geometry;
             }
 
-            entry.box.position.copy(center);
-            entry.label.position.set(center.x, box3.max.y, center.z);
+            entry.sphere.position.copy(boundingSphere.center);
+            entry.label.position.set(
+                boundingSphere.center.x,
+                boundingSphere.center.y + radius,
+                boundingSphere.center.z
+            );
         });
 
         // drop boundaries for clusters no longer represented (e.g. switching

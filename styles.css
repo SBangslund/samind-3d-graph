@@ -55,3 +55,43 @@
 	display: none;
 	visibility: hidden;
 }
+
+.graph-3d-view .cluster-legend-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 8px;
+}
+
+.graph-3d-view .cluster-legend-item {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.8rem;
+}
+
+.graph-3d-view .cluster-legend-swatch {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	flex-shrink: 0;
+}
+
+.graph-3d-view .cluster-legend-label {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.graph-3d-view .cluster-legend-count {
+	color: var(--text-muted);
+	font-size: 0.7rem;
+}
+
+.graph-3d-view .cluster-legend-empty,
+.graph-3d-view .cluster-legend-generated {
+	font-size: 0.7rem;
+	color: var(--text-muted);
+	padding: 4px 8px;
+}

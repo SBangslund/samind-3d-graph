@@ -65,14 +65,22 @@ export class NodeService extends AbstractGraphService {
             }
             nodeEl.style.zIndex = '100';
         } else {
-            nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : 'white';
+            const importance = this.plugin.analysisService.getImportance(node.id);
+            nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getNodeColor(node);
             nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
-            nodeEl.style.opacity = this.highlightService.getNodeSize() > 0
-                ? (this.highlightService.hasNode(node)
-                    ? '1'
-                    : '0.05')
-                : '.15';
-            nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
+            if (this.highlightService.getNodeSize() > 0) {
+                nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.05';
+                nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
+            } else {
+                // idle state (nothing hovered): let importance drive legibility,
+                // so hub notes stay readable while the long tail stays out of the way
+                nodeEl.style.opacity = importance !== null
+                    ? Math.min(0.15 + importance * 0.7, 0.9) + ''
+                    : '.15';
+                nodeEl.style.fontSize = importance !== null
+                    ? (0.45 + importance * 0.55) + 'rem'
+                    : '0.45rem';
+            }
         }
 
         nodeEl.style.marginTop = '-.75rem';
@@ -153,8 +161,9 @@ export class NodeService extends AbstractGraphService {
 
     private getNodeVal(node: Node): number {
         const importance = this.plugin.analysisService.getImportance(node.id);
-        // importance 0-1 maps onto 0.5x-2.5x the base node size
-        return importance !== null ? node.val * (0.5 + importance * 2) : node.val;
+        // importance 0-1 maps onto 0.3x-4x the base node size, so hub notes
+        // stand out clearly against the long tail
+        return importance !== null ? node.val * (0.3 + importance * 3.7) : node.val;
     }
 
     private isNodeVisible(node: Node): boolean {

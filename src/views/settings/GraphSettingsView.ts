@@ -10,6 +10,8 @@ import GroupSettingsView from "./categories/GroupSettingsView";
 import FilterSettingsView from "./categories/FilterSettingsView";
 import GraphSettings from "src/settings/GraphSettings";
 import ObsidianTheme from "src/util/ObsidianTheme";
+import { AnalysisService } from "src/analysis/AnalysisService";
+import ClusterLegendView from "./categories/ClusterLegendView";
 
 export class GraphSettingsView extends HTMLDivElement {
 
@@ -19,11 +21,17 @@ export class GraphSettingsView extends HTMLDivElement {
 	private graphControls: HTMLDivElement;
 	private readonly settingsState: State<GraphSettings>;
 	private readonly theme: ObsidianTheme;
+	private readonly analysisService: AnalysisService;
 
-	constructor(settingsState: State<GraphSettings>, theme: ObsidianTheme) {
+	constructor(
+		settingsState: State<GraphSettings>,
+		theme: ObsidianTheme,
+		analysisService: AnalysisService
+	) {
 		super();
 		this.settingsState = settingsState;
 		this.theme = theme;
+		this.analysisService = analysisService;
 	}
 
 	async connectedCallback() {
@@ -40,6 +48,7 @@ export class GraphSettingsView extends HTMLDivElement {
 			this.graphControls.createDiv({ cls: "control-buttons" })
 		);
 
+		this.appendClusterLegend();
 		this.appendSetting(
 			this.settingsState.createSubState("value.filters", FilterSettings),
 			"Filters",
@@ -109,6 +118,18 @@ export class GraphSettingsView extends HTMLDivElement {
 			.setIcon("x")
 			.setTooltip("Close")
 			.onClick(() => (this.isCollapsedState.value = true));
+	}
+
+	private appendClusterLegend() {
+		const header = document.createElement("header");
+		header.classList.add("graph-control-section-header");
+		header.innerHTML = "Clusters (AI Analysis)";
+		const item = new TreeItem(header, [
+			(containerEl: HTMLElement) =>
+				ClusterLegendView(this.analysisService, containerEl),
+		]);
+		item.classList.add("is-collapsed");
+		this.graphControls.append(item);
 	}
 
 	// utility function to append a setting

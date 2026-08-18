@@ -34,7 +34,8 @@ export class Graph3dView extends ItemView {
 			this.appendGraph(viewContent);
 			const settings = new GraphSettingsView(
 				this.plugin.settingsState,
-				this.plugin.theme
+				this.plugin.theme,
+				this.plugin.analysisService
 			);
 			viewContent.appendChild(settings);
 			// the pane's layout isn't finalized yet at this point (it was just

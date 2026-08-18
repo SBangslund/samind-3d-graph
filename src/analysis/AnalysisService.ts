@@ -52,6 +52,18 @@ export class AnalysisService {
 		return this.data?.gaps ?? [];
 	}
 
+	// number of notes assigned to each cluster id, for a legend/breakdown UI
+	getClusterNoteCounts(): Record<string, number> {
+		const counts: Record<string, number> = {};
+		if (!this.data) return counts;
+		Object.values(this.data.nodes).forEach((entry) => {
+			if (entry.clusterId) {
+				counts[entry.clusterId] = (counts[entry.clusterId] ?? 0) + 1;
+			}
+		});
+		return counts;
+	}
+
 	private getCluster(clusterId: string): AnalysisCluster | undefined {
 		return this.data?.clusters.find((c) => c.id === clusterId);
 	}

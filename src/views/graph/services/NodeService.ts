@@ -20,10 +20,19 @@ const MAX_VISIBLE_LABELS = 6;
 // how close (screen px) the mouse needs to be to the *nearest* node before
 // we consider its whole cluster "hovered"
 const CLUSTER_HOVER_RADIUS_PX = 90;
+// how much closer a different cluster's nearest node must be, versus the
+// currently-hovered cluster's nearest node, before switching - prevents
+// flapping back and forth right at a boundary between two clusters
+const CLUSTER_HOVER_HYSTERESIS_PX = 40;
 // alpha used to fade nodes outside whatever's currently focused - the
 // hovered/inspected node's neighbor set, or (separately) the hovered
 // cluster. Shared so both interactions dim by the same amount.
 const DIM_ALPHA = 0.2;
+// minimum time between cluster-hover re-evaluations. Recoloring the whole
+// graph (nodeColor is only re-run when the accessor is reassigned) is
+// expensive enough that flipping "nearest node" every frame near a cluster
+// boundary caused visible lag; throttling caps how often that can happen
+const CLUSTER_HOVER_CHECK_INTERVAL_MS = 150;
 
 const clamp = (value: number, min: number, max: number): number =>
     Math.min(max, Math.max(min, value));
@@ -48,6 +57,7 @@ export class NodeService extends AbstractGraphService {
     };
     private activeLeafChangeRef: EventRef;
     private hoveredClusterId: string | null = null;
+    private lastClusterHoverCheck = 0;
 
     constructor(
         instance: ForceGraph3DInstance,
@@ -183,6 +193,11 @@ export class NodeService extends AbstractGraphService {
         const candidates: { el: HTMLDivElement; screenDist: number }[] = [];
         let closestNodeRef: Node | null = null;
         let closestNodeDist = Infinity;
+        // closest distance among members of whichever cluster is CURRENTLY
+        // hovered, tracked separately so we can require a clear margin
+        // before switching away from it (plain distance-throttling alone
+        // still let the choice flap every tick right at a boundary)
+        let currentClusterMinDist = Infinity;
 
         // a plain for-of loop here (not .forEach) so the closestNodeRef/
         // closestNodeDist reassignments below stay in the same control-flow
@@ -194,8 +209,10 @@ export class NodeService extends AbstractGraphService {
                 continue;
             }
             // don't fight the deliberate hover/inspect highlight styling
+            // (but cluster-hover shares the same highlight set and should
+            // NOT suppress the proximity-based label system - see styleLabel)
             if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) continue;
-            if (this.highlightService.getNodeSize() > 0) continue;
+            if (this.highlightService.getNodeSize() > 0 && this.hoveredClusterId === null) continue;
 
             const runtimeNode = node as unknown as { x?: number; y?: number; z?: number };
             const { x, y, z } = runtimeNode;
@@ -218,6 +235,12 @@ export class NodeService extends AbstractGraphService {
                 closestNodeDist = screenDist;
                 closestNodeRef = node;
             }
+            if (this.hoveredClusterId !== null && screenDist < currentClusterMinDist) {
+                const nodeClusterId = this.plugin.analysisService.getClusterId(node.id);
+                if (nodeClusterId === this.hoveredClusterId) {
+                    currentClusterMinDist = screenDist;
+                }
+            }
 
             if (screenDist > MOUSE_PROXIMITY_RADIUS_PX) {
                 el.style.opacity = '0';
@@ -237,16 +260,62 @@ export class NodeService extends AbstractGraphService {
             el.style.fontSize = ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem';
         });
 
-        const newHoveredClusterId = closestNodeRef !== null && closestNodeDist <= CLUSTER_HOVER_RADIUS_PX
-            ? this.plugin.analysisService.getClusterId(closestNodeRef.id)
-            : null;
-        if (newHoveredClusterId !== this.hoveredClusterId) {
-            this.hoveredClusterId = newHoveredClusterId;
-            this.clusterBoundaryService.setHoveredCluster(this.hoveredClusterId);
-            // nodeColor is only re-evaluated when the accessor is reassigned,
-            // not continuously - force a recolor pass so the dimming/hover
-            // change in getNodeColor actually shows up
-            this.instance.nodeColor(this.instance.nodeColor());
+        // while a specific node is genuinely focused (hover or inspect),
+        // its cluster highlight is driven directly by onNodeHover/
+        // inspectNode instead - don't let this proximity-based check fight
+        // over hoveredClusterId with that
+        const now = performance.now();
+        if (!this.inspecting && this.hoveredNode === null
+            && now - this.lastClusterHoverCheck >= CLUSTER_HOVER_CHECK_INTERVAL_MS) {
+            this.lastClusterHoverCheck = now;
+
+            let newHoveredClusterId: string | null;
+            if (closestNodeRef === null) {
+                newHoveredClusterId = null;
+            } else {
+                const globalClosestClusterId = this.plugin.analysisService.getClusterId(closestNodeRef.id);
+                const stayOnCurrent = this.hoveredClusterId !== null
+                    && globalClosestClusterId !== this.hoveredClusterId
+                    && currentClusterMinDist <= CLUSTER_HOVER_RADIUS_PX
+                    && closestNodeDist + CLUSTER_HOVER_HYSTERESIS_PX >= currentClusterMinDist;
+                if (stayOnCurrent) {
+                    // right at a boundary the "nearest node" can alternate
+                    // between two clusters from one check to the next; stick
+                    // with the current cluster unless the new one is clearly
+                    // closer, instead of flapping back and forth
+                    newHoveredClusterId = this.hoveredClusterId;
+                } else {
+                    newHoveredClusterId = closestNodeDist <= CLUSTER_HOVER_RADIUS_PX ? globalClosestClusterId : null;
+                }
+            }
+
+            if (newHoveredClusterId !== this.hoveredClusterId) {
+                this.setHoveredClusterId(newHoveredClusterId);
+                // Populate the SAME highlight set node-hover uses, instead
+                // of a separate dimming path, so both interactions dim
+                // through the exact same mechanism (getNodeColor only knows
+                // about "is this node in the highlighted set", not why).
+                this.highlightService.clear();
+                if (this.hoveredClusterId) {
+                    const clusterId = this.hoveredClusterId;
+                    this.graph.nodes.forEach((n) => {
+                        if (this.plugin.analysisService.getClusterId(n.id) === clusterId) {
+                            this.highlightService.addNode(n.id);
+                        }
+                    });
+                    // also highlight edges within the cluster, same as
+                    // node-hover highlights its neighbor links - otherwise
+                    // edges never dim/brighten for cluster-hover at all
+                    this.plugin.globalGraph.clone().links.forEach((link) => {
+                        const sourceCluster = this.plugin.analysisService.getClusterId(link.source);
+                        const targetCluster = this.plugin.analysisService.getClusterId(link.target);
+                        if (sourceCluster === clusterId && targetCluster === clusterId) {
+                            this.highlightService.addLink(link);
+                        }
+                    });
+                }
+                this.highlightService.update();
+            }
         }
 
         this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);
@@ -276,7 +345,11 @@ export class NodeService extends AbstractGraphService {
             nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getLabelColor(node);
             nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
             nodeEl.style.zIndex = '';
-            if (this.highlightService.getNodeSize() > 0) {
+            // when the highlight set is cluster-hover-driven (rather than a
+            // specific node's hover/inspect), labels keep using the
+            // proximity-declutter system below instead of all lighting up
+            // at once - a whole cluster can be dozens of notes
+            if (this.highlightService.getNodeSize() > 0 && this.hoveredClusterId === null) {
                 nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.05';
                 nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
             } else {
@@ -310,9 +383,21 @@ export class NodeService extends AbstractGraphService {
         });
     }
 
+    // Updates the box layer's highlighted cluster, no-op if unchanged.
+    // Shared by node-hover/inspect (highlights the focused node's own
+    // cluster) and proximity-based cluster-hover (highlights whichever
+    // cluster the cursor is near), so both dim the rest of the boxes the
+    // same way.
+    private setHoveredClusterId(clusterId: string | null): void {
+        if (clusterId === this.hoveredClusterId) return;
+        this.hoveredClusterId = clusterId;
+        this.clusterBoundaryService.setHoveredCluster(clusterId);
+    }
+
     private onRemove(): void {
         this.inspecting = false;
         this.highlightService.clear();
+        this.setHoveredClusterId(null);
         this.update();
     }
 
@@ -321,8 +406,13 @@ export class NodeService extends AbstractGraphService {
     }
 
     private onNodeHover(node: Node | null) {
+        // checks our own hoveredNode, not highlightService.getNodeSize():
+        // that set can also be populated by cluster-hover, and the raycast
+        // reporting "no node under cursor" (very common while idly moving
+        // the mouse) must not clear a cluster highlight that has nothing to
+        // do with node-hover
         if (this.inspecting ||
-            (!node && !this.highlightService.getNodeSize()) ||
+            (!node && this.hoveredNode === null) ||
             (node && this.hoveredNode === node)) {
             return;
         }
@@ -330,6 +420,10 @@ export class NodeService extends AbstractGraphService {
         (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
 
         this.highlightService.clear();
+        // the box layer highlights whichever cluster is relevant right now -
+        // the hovered node's own cluster, same as cluster-hover would - so
+        // it dims/brightens consistently no matter which interaction triggered it
+        this.setHoveredClusterId(node ? this.plugin.analysisService.getClusterId(node.id) : null);
 
         if (node) {
             this.highlightService.addNode(node.id);
@@ -347,6 +441,7 @@ export class NodeService extends AbstractGraphService {
         (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
 
         this.highlightService.clear();
+        this.setHoveredClusterId(node ? this.plugin.analysisService.getClusterId(node.id) : null);
         if (node) {
             this.hoveredNode = node;
             this.highlightService.addNode(node.id);
@@ -435,17 +530,11 @@ export class NodeService extends AbstractGraphService {
         if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) {
             return color;
         }
+        // covers both node-hover/inspect (highlight set = hovered node's
+        // neighbors) and cluster-hover (highlight set = cluster members,
+        // populated in updateLabelVisibility) - one dimming path for both
         if (this.highlightService.getNodeSize() > 0 && !this.highlightService.hasNode(node)) {
             return this.toRgba(color, DIM_ALPHA);
-        }
-        // no specific node is hover/inspect-focused right now - if the
-        // cursor is generally near a cluster, dim everything outside it so
-        // the hovered cluster reads as a whole region, not just its box
-        if (this.hoveredClusterId) {
-            const nodeClusterId = this.plugin.analysisService.getClusterId(node.id);
-            if (nodeClusterId !== this.hoveredClusterId) {
-                return this.toRgba(color, DIM_ALPHA);
-            }
         }
         return color;
     };

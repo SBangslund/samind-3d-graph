@@ -31,7 +31,11 @@ export class LinkService extends AbstractGraphService {
     private getLinkColor(link: Link): string {
         return this.highlightService.getLinkSize() > 0
             ? (this.highlightService.hasLink(link)
-                ? this.plugin.theme.textAccent
+                // theme's --text-accent can be dark/muted depending on the
+                // active theme and blends into the background; 'orange' is
+                // already this plugin's established highlight color (see
+                // the parent-node label styling in NodeService)
+                ? 'orange'
                 : 'rgba(255, 255, 255, 0.15)')
             : this.plugin.theme.textMuted;
     }

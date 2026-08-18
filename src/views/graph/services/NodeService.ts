@@ -97,8 +97,8 @@ export class NodeService extends AbstractGraphService {
         // zoomed out far. Importance/mouse proximity only compete for space
         // within this budget, they can't exceed it.
         const overallCamDist = camPos.length();
-        const zoomOutStart = this.baselineCameraDistance * 1.5;
-        const zoomOutEnd = this.baselineCameraDistance * 5;
+        const zoomOutStart = this.baselineCameraDistance * 1.1;
+        const zoomOutEnd = this.baselineCameraDistance * 2.8;
         const zoomCap = clamp(1 - (overallCamDist - zoomOutStart) / (zoomOutEnd - zoomOutStart), 0.12, 1);
 
         this.labelElements.forEach((el, nodeId) => {
@@ -140,14 +140,12 @@ export class NodeService extends AbstractGraphService {
         this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);
     };
 
-    private createNodeThreeObject(node: Node): CSS2DObject {
-        const nodeEl = document.createElement('div');
-        const match = node.id.match(/\/([^\/]+)\.(md|png)$/);
-        if (match) {
-            nodeEl.textContent = match[1];
-        } else {
-            nodeEl.textContent = node.id;
-        }
+    // Applies the current highlight/hover/idle appearance to an already-mounted
+    // label element. Kept separate from element creation so highlight changes
+    // (which happen on every hover) restyle in place instead of forcing
+    // three-forcegraph to tear down and recreate every label - that recreate
+    // cycle is what caused the flicker.
+    private styleLabel(node: Node, nodeEl: HTMLDivElement): void {
         if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) {
             let index = this.highlightService.parentIndex(node);
             let opacity = 0.75 - (index * 5) / 100;
@@ -166,12 +164,14 @@ export class NodeService extends AbstractGraphService {
             const importance = this.plugin.analysisService.getImportance(node.id);
             nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getNodeColor(node);
             nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
+            nodeEl.style.zIndex = '';
             if (this.highlightService.getNodeSize() > 0) {
                 nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.05';
                 nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
             } else {
                 // idle state (nothing hovered): let importance drive legibility,
                 // so hub notes stay readable while the long tail stays out of the way
+                // (the per-frame visibility loop takes over from here)
                 nodeEl.style.opacity = importance !== null
                     ? Math.min(0.15 + importance * 0.7, 0.9) + ''
                     : '.15';
@@ -180,6 +180,14 @@ export class NodeService extends AbstractGraphService {
                     : '0.45rem';
             }
         }
+    }
+
+    private createNodeThreeObject(node: Node): CSS2DObject {
+        const nodeEl = document.createElement('div');
+        const match = node.id.match(/\/([^\/]+)\.(md|png)$/);
+        nodeEl.textContent = match ? match[1] : node.id;
+
+        this.styleLabel(node, nodeEl);
 
         nodeEl.style.marginTop = '-.75rem';
         nodeEl.className = 'node-label';
@@ -189,8 +197,10 @@ export class NodeService extends AbstractGraphService {
 
     private update(): void {
         this.highlightService.update();
-        this.labelElements.clear();
-        this.instance.nodeThreeObject((node: Node) => this.createNodeThreeObject(node))
+        this.labelElements.forEach((el, nodeId) => {
+            const node = this.graph.getNodeById(nodeId);
+            if (node) this.styleLabel(node, el);
+        });
     }
 
     private onRemove(): void {

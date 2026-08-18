@@ -17,12 +17,17 @@ const DIM_BOX_OPACITY = 0.04;
 const BASE_LABEL_OPACITY = 0.35;
 const HOVER_LABEL_OPACITY = 0.85;
 const DIM_LABEL_OPACITY = 0.08;
+// how much of the remaining distance to the target opacity to close per
+// frame - the box material isn't a DOM element, so CSS transitions can't
+// smooth it; this ease-toward-target loop does the same job by hand
+const OPACITY_LERP_FACTOR = 0.12;
 
 type RuntimeNode = Node & { x?: number; y?: number; z?: number };
 
 interface BoundaryEntry {
     box: THREE.LineSegments;
     label: CSS2DObject;
+    targetBoxOpacity: number;
 }
 
 // Draws a dashed bounding box + floating title around each AI cluster's
@@ -36,6 +41,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
     private readonly boundaries: Map<string, BoundaryEntry> = new Map();
     private intervalId: number | null = null;
     private hoveredClusterId: string | null = null;
+    private opacityAnimationFrameId: number | null = null;
 
     constructor(
         instance: ForceGraph3DInstance,
@@ -48,14 +54,26 @@ export class ClusterBoundaryService extends AbstractGraphService {
     public init(): void {
         this.rebuild();
         this.intervalId = window.setInterval(() => this.rebuild(), REBUILD_INTERVAL_MS);
+        this.opacityAnimationFrameId = requestAnimationFrame(this.tickOpacity);
     }
 
     public destroy(): void {
         if (this.intervalId !== null) window.clearInterval(this.intervalId);
+        if (this.opacityAnimationFrameId !== null) cancelAnimationFrame(this.opacityAnimationFrameId);
         const scene = this.instance.scene();
         this.boundaries.forEach((entry) => this.disposeEntry(scene, entry));
         this.boundaries.clear();
     }
+
+    // Eases each box's material opacity toward its current target every
+    // frame, since transparent WebGL materials don't get CSS transitions.
+    private tickOpacity = (): void => {
+        this.boundaries.forEach((entry) => {
+            const material = entry.box.material as THREE.LineDashedMaterial;
+            material.opacity += (entry.targetBoxOpacity - material.opacity) * OPACITY_LERP_FACTOR;
+        });
+        this.opacityAnimationFrameId = requestAnimationFrame(this.tickOpacity);
+    };
 
     // Called (cheaply) every frame by NodeService with whichever cluster the
     // cursor is currently nearest to. Only actually restyles when the value
@@ -68,16 +86,15 @@ export class ClusterBoundaryService extends AbstractGraphService {
 
     private applyHoverStyles(): void {
         this.boundaries.forEach((entry, clusterId) => {
-            const material = entry.box.material as THREE.LineDashedMaterial;
             const isHovered = clusterId === this.hoveredClusterId;
             if (this.hoveredClusterId === null) {
-                material.opacity = BASE_BOX_OPACITY;
+                entry.targetBoxOpacity = BASE_BOX_OPACITY;
                 entry.label.element.style.opacity = String(BASE_LABEL_OPACITY);
             } else if (isHovered) {
-                material.opacity = HOVER_BOX_OPACITY;
+                entry.targetBoxOpacity = HOVER_BOX_OPACITY;
                 entry.label.element.style.opacity = String(HOVER_LABEL_OPACITY);
             } else {
-                material.opacity = DIM_BOX_OPACITY;
+                entry.targetBoxOpacity = DIM_BOX_OPACITY;
                 entry.label.element.style.opacity = String(DIM_LABEL_OPACITY);
             }
         });
@@ -152,7 +169,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
 
                 scene.add(line);
                 scene.add(label);
-                entry = { box: line, label };
+                entry = { box: line, label, targetBoxOpacity: BASE_BOX_OPACITY };
                 this.boundaries.set(clusterId, entry);
             } else {
                 entry.box.geometry.dispose();

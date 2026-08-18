@@ -11,6 +11,13 @@ const BOX_PADDING = 24;
 // below this many members, a box doesn't read as a meaningful region
 const MIN_CLUSTER_SIZE = 2;
 
+const BASE_BOX_OPACITY = 0.2;
+const HOVER_BOX_OPACITY = 0.55;
+const DIM_BOX_OPACITY = 0.04;
+const BASE_LABEL_OPACITY = 0.35;
+const HOVER_LABEL_OPACITY = 0.85;
+const DIM_LABEL_OPACITY = 0.08;
+
 type RuntimeNode = Node & { x?: number; y?: number; z?: number };
 
 interface BoundaryEntry {
@@ -28,6 +35,7 @@ interface BoundaryEntry {
 export class ClusterBoundaryService extends AbstractGraphService {
     private readonly boundaries: Map<string, BoundaryEntry> = new Map();
     private intervalId: number | null = null;
+    private hoveredClusterId: string | null = null;
 
     constructor(
         instance: ForceGraph3DInstance,
@@ -47,6 +55,32 @@ export class ClusterBoundaryService extends AbstractGraphService {
         const scene = this.instance.scene();
         this.boundaries.forEach((entry) => this.disposeEntry(scene, entry));
         this.boundaries.clear();
+    }
+
+    // Called (cheaply) every frame by NodeService with whichever cluster the
+    // cursor is currently nearest to. Only actually restyles when the value
+    // changes, so most calls are a no-op.
+    public setHoveredCluster(clusterId: string | null): void {
+        if (clusterId === this.hoveredClusterId) return;
+        this.hoveredClusterId = clusterId;
+        this.applyHoverStyles();
+    }
+
+    private applyHoverStyles(): void {
+        this.boundaries.forEach((entry, clusterId) => {
+            const material = entry.box.material as THREE.LineDashedMaterial;
+            const isHovered = clusterId === this.hoveredClusterId;
+            if (this.hoveredClusterId === null) {
+                material.opacity = BASE_BOX_OPACITY;
+                entry.label.element.style.opacity = String(BASE_LABEL_OPACITY);
+            } else if (isHovered) {
+                material.opacity = HOVER_BOX_OPACITY;
+                entry.label.element.style.opacity = String(HOVER_LABEL_OPACITY);
+            } else {
+                material.opacity = DIM_BOX_OPACITY;
+                entry.label.element.style.opacity = String(DIM_LABEL_OPACITY);
+            }
+        });
     }
 
     private disposeEntry(scene: THREE.Scene, entry: BoundaryEntry): void {
@@ -100,7 +134,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 const material = new THREE.LineDashedMaterial({
                     color: new THREE.Color(cluster.color),
                     transparent: true,
-                    opacity: 0.2,
+                    opacity: BASE_BOX_OPACITY,
                     dashSize: 6,
                     gapSize: 4,
                 });
@@ -113,6 +147,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 labelEl.className = 'cluster-boundary-label';
                 labelEl.textContent = cluster.label;
                 labelEl.style.color = cluster.color;
+                labelEl.style.opacity = String(BASE_LABEL_OPACITY);
                 const label = new CSS2DObject(labelEl);
 
                 scene.add(line);
@@ -137,5 +172,9 @@ export class ClusterBoundaryService extends AbstractGraphService {
             if (entry) this.disposeEntry(scene, entry);
             this.boundaries.delete(clusterId);
         });
+
+        // make sure any newly (re)created entries reflect the current hover
+        // state, in case hover changed since the last rebuild
+        this.applyHoverStyles();
     };
 }

@@ -9,6 +9,7 @@ import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { EventRef, WorkspaceLeaf } from "obsidian";
 import Graph from "src/graph/Graph";
 import { lighten } from "polished";
+import { ClusterBoundaryService } from "./ClusterBoundaryService";
 
 // how close (screen px) the mouse needs to be to a label to boost its legibility
 const MOUSE_PROXIMITY_RADIUS_PX = 220;
@@ -16,6 +17,13 @@ const MOUSE_PROXIMITY_RADIUS_PX = 220;
 // many nodes fall within the proximity radius (keeps zoomed-out/dense
 // clusters readable instead of piling up overlapping text)
 const MAX_VISIBLE_LABELS = 6;
+// how close (screen px) the mouse needs to be to the *nearest* node before
+// we consider its whole cluster "hovered"
+const CLUSTER_HOVER_RADIUS_PX = 90;
+// alpha used to fade nodes that aren't in the hovered cluster
+const CLUSTER_DIM_ALPHA = 0.12;
+// alpha used to fade nodes outside the hovered/focused neighbor set
+const NEIGHBOR_DIM_ALPHA = 0.25;
 
 const clamp = (value: number, min: number, max: number): number =>
     Math.min(max, Math.max(min, value));
@@ -39,12 +47,14 @@ export class NodeService extends AbstractGraphService {
         this.mouseScreenPos = null;
     };
     private activeLeafChangeRef: EventRef;
+    private hoveredClusterId: string | null = null;
 
     constructor(
         instance: ForceGraph3DInstance,
         plugin: Graph3dPlugin,
         private highlightService: HighlightService,
-        private graph: Graph) {
+        private graph: Graph,
+        private clusterBoundaryService: ClusterBoundaryService) {
         super(instance, plugin);
     }
 
@@ -171,24 +181,29 @@ export class NodeService extends AbstractGraphService {
         // regardless of zoom level or how dense the cluster under the
         // cursor is.
         const candidates: { el: HTMLDivElement; screenDist: number }[] = [];
+        let closestNodeRef: Node | null = null;
+        let closestNodeDist = Infinity;
 
-        this.labelElements.forEach((el, nodeId) => {
+        // a plain for-of loop here (not .forEach) so the closestNodeRef/
+        // closestNodeDist reassignments below stay in the same control-flow
+        // scope as their later reads
+        for (const [nodeId, el] of this.labelElements) {
             const node = this.graph.getNodeById(nodeId);
             if (!node) {
                 this.labelElements.delete(nodeId);
-                return;
+                continue;
             }
             // don't fight the deliberate hover/inspect highlight styling
-            if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) return;
-            if (this.highlightService.getNodeSize() > 0) return;
+            if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) continue;
+            if (this.highlightService.getNodeSize() > 0) continue;
 
             const runtimeNode = node as unknown as { x?: number; y?: number; z?: number };
             const { x, y, z } = runtimeNode;
-            if (x === undefined || y === undefined || z === undefined) return;
+            if (x === undefined || y === undefined || z === undefined) continue;
 
             if (!this.mouseScreenPos) {
                 el.style.opacity = '0';
-                return;
+                continue;
             }
 
             const screenPos = this.instance.graph2ScreenCoords(x, y, z);
@@ -196,12 +211,20 @@ export class NodeService extends AbstractGraphService {
             const sdy = screenPos.y - this.mouseScreenPos.y;
             const screenDist = Math.sqrt(sdx * sdx + sdy * sdy);
 
+            // tracked independent of the (tighter) label reveal radius, so
+            // we can tell which cluster the cursor is generally near even
+            // when it's not quite close enough to any single label
+            if (screenDist < closestNodeDist) {
+                closestNodeDist = screenDist;
+                closestNodeRef = node;
+            }
+
             if (screenDist > MOUSE_PROXIMITY_RADIUS_PX) {
                 el.style.opacity = '0';
-                return;
+                continue;
             }
             candidates.push({ el, screenDist });
-        });
+        }
 
         candidates.sort((a, b) => a.screenDist - b.screenDist);
         candidates.forEach(({ el, screenDist }, rank) => {
@@ -213,6 +236,18 @@ export class NodeService extends AbstractGraphService {
             el.style.opacity = (visibility * 0.9 * zoomCap).toFixed(2);
             el.style.fontSize = ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem';
         });
+
+        const newHoveredClusterId = closestNodeRef !== null && closestNodeDist <= CLUSTER_HOVER_RADIUS_PX
+            ? this.plugin.analysisService.getClusterId(closestNodeRef.id)
+            : null;
+        if (newHoveredClusterId !== this.hoveredClusterId) {
+            this.hoveredClusterId = newHoveredClusterId;
+            this.clusterBoundaryService.setHoveredCluster(this.hoveredClusterId);
+            // nodeColor is only re-evaluated when the accessor is reassigned,
+            // not continuously - force a recolor pass so the dimming/hover
+            // change in getNodeColor actually shows up
+            this.instance.nodeColor(this.instance.nodeColor());
+        }
 
         this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);
     };
@@ -364,6 +399,24 @@ export class NodeService extends AbstractGraphService {
         }
     }
 
+    // Converts a hex or rgb() color string to rgba() at the given alpha, for
+    // fading a node's color without touching the (global, not per-node)
+    // nodeOpacity setting. Falls back to the original color if unparseable.
+    private toRgba(color: string, alpha: number): string {
+        const matchRgb = color.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+        if (matchRgb) {
+            return `rgba(${matchRgb[1]},${matchRgb[2]},${matchRgb[3]}, ${alpha})`;
+        }
+        const matchHex = color.match(/#?([a-fA-F\d]{2})([a-fA-F\d]{2})([a-fA-F\d]{2})/);
+        if (matchHex) {
+            const red = parseInt(matchHex[1], 16);
+            const green = parseInt(matchHex[2], 16);
+            const blue = parseInt(matchHex[3], 16);
+            return `rgba(${red},${green},${blue}, ${alpha})`;
+        }
+        return color;
+    }
+
     private getNodeColor(node: Node): string {
         let color = this.plugin.theme.textMuted;
         let matchedGroup = false;
@@ -383,16 +436,15 @@ export class NodeService extends AbstractGraphService {
             return color;
         }
         if (this.highlightService.getNodeSize() > 0 && !this.highlightService.hasNode(node)) {
-            const matchRgb = color.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
-            if (matchRgb) {
-                return `rgba(${matchRgb[1]},${matchRgb[2]},${matchRgb[3]}, 0.25)`;
-            }
-            const matchHex = color.match(/#?([a-fA-F\d]{2})([a-fA-F\d]{2})([a-fA-F\d]{2})/);
-            if (matchHex) {
-                const red = parseInt(matchHex[1], 16);
-                const green = parseInt(matchHex[2], 16);
-                const blue = parseInt(matchHex[3], 16);
-                return `rgba(${red},${green},${blue}, 0.25)`;
+            return this.toRgba(color, NEIGHBOR_DIM_ALPHA);
+        }
+        // no specific node is hover/inspect-focused right now - if the
+        // cursor is generally near a cluster, dim everything outside it so
+        // the hovered cluster reads as a whole region, not just its box
+        if (this.hoveredClusterId) {
+            const nodeClusterId = this.plugin.analysisService.getClusterId(node.id);
+            if (nodeClusterId !== this.hoveredClusterId) {
+                return this.toRgba(color, CLUSTER_DIM_ALPHA);
             }
         }
         return color;

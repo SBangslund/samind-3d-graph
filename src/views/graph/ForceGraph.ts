@@ -66,9 +66,9 @@ export class ForceGraph {
 	private initServices(): void {
 		this.highlightService = new HighlightService(this.instance, this.plugin);
 		this.linkService = new LinkService(this.instance, this.plugin, this.highlightService);
-		this.nodeService = new NodeService(this.instance, this.plugin, this.highlightService, this.graph);
-		this.settingsService = new SettingsService(this.instance, this.plugin);
 		this.clusterBoundaryService = new ClusterBoundaryService(this.instance, this.plugin, this.graph);
+		this.nodeService = new NodeService(this.instance, this.plugin, this.highlightService, this.graph, this.clusterBoundaryService);
+		this.settingsService = new SettingsService(this.instance, this.plugin);
 	}
 
 	private initInstance() {

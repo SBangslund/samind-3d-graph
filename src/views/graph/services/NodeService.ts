@@ -64,9 +64,14 @@ export class NodeService extends AbstractGraphService {
 
         // pull same-cluster notes toward each other so the AI clustering is
         // spatially visible, not just color - otherwise cluster members can
-        // land anywhere in the layout since physics only follows real links
+        // land anywhere in the layout since physics only follows real links.
+        // Registering the force here (before three-forcegraph's own deferred
+        // digest runs) is enough for it to pick it up naturally - do NOT
+        // also call d3ReheatSimulation() here: it force-sets engineRunning
+        // true synchronously, racing ahead of that digest, which is what
+        // actually assigns state.layout - tickFrame can then run with
+        // engineRunning true but state.layout still undefined and crash.
         this.instance.d3Force('cluster', this.createClusterForce() as never);
-        this.instance.d3ReheatSimulation();
 
         const rendererEl = this.instance.renderer().domElement;
         rendererEl.addEventListener('mousemove', this.onMouseMove);

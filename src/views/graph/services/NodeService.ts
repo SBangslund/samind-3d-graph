@@ -212,7 +212,7 @@ export class NodeService extends AbstractGraphService {
             // (but cluster-hover shares the same highlight set and should
             // NOT suppress the proximity-based label system - see styleLabel)
             if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) continue;
-            if (this.highlightService.getNodeSize() > 0 && this.hoveredClusterId === null) continue;
+            if (this.highlightService.getNodeSize() > 0 && this.isNodeFocusActive()) continue;
 
             const runtimeNode = node as unknown as { x?: number; y?: number; z?: number };
             const { x, y, z } = runtimeNode;
@@ -345,11 +345,12 @@ export class NodeService extends AbstractGraphService {
             nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getLabelColor(node);
             nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
             nodeEl.style.zIndex = '';
-            // when the highlight set is cluster-hover-driven (rather than a
-            // specific node's hover/inspect), labels keep using the
-            // proximity-declutter system below instead of all lighting up
-            // at once - a whole cluster can be dozens of notes
-            if (this.highlightService.getNodeSize() > 0 && this.hoveredClusterId === null) {
+            // only light up the whole highlighted set (hovered node + its
+            // neighbors) when a specific node is genuinely focused; when
+            // the highlight set is cluster-hover-driven instead, labels
+            // keep using the proximity-declutter system below - a whole
+            // cluster can be dozens of notes
+            if (this.highlightService.getNodeSize() > 0 && this.isNodeFocusActive()) {
                 nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.05';
                 nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
             } else {
@@ -392,6 +393,15 @@ export class NodeService extends AbstractGraphService {
         if (clusterId === this.hoveredClusterId) return;
         this.hoveredClusterId = clusterId;
         this.clusterBoundaryService.setHoveredCluster(clusterId);
+    }
+
+    // True when a specific node is genuinely hovered or inspected (as
+    // opposed to the highlight set being populated by proximity-based
+    // cluster-hover instead) - hoveredClusterId alone can't tell these
+    // apart any more, since node-hover/inspect now sets it too so the box
+    // layer stays consistent.
+    private isNodeFocusActive(): boolean {
+        return this.inspecting || this.hoveredNode !== null;
     }
 
     private onRemove(): void {

@@ -91,6 +91,16 @@ export class NodeService extends AbstractGraphService {
         const near = this.baselineCameraDistance * 0.4;
         const far = this.baselineCameraDistance * 1.8;
 
+        // global cap that shrinks/fades ALL labels together as the camera zooms
+        // out, regardless of importance - otherwise a handful of "important"
+        // labels can stay large enough to bury the graph shape entirely once
+        // zoomed out far. Importance/mouse proximity only compete for space
+        // within this budget, they can't exceed it.
+        const overallCamDist = camPos.length();
+        const zoomOutStart = this.baselineCameraDistance * 1.5;
+        const zoomOutEnd = this.baselineCameraDistance * 5;
+        const zoomCap = clamp(1 - (overallCamDist - zoomOutStart) / (zoomOutEnd - zoomOutStart), 0.12, 1);
+
         this.labelElements.forEach((el, nodeId) => {
             const node = this.graph.getNodeById(nodeId);
             if (!node) {
@@ -123,8 +133,8 @@ export class NodeService extends AbstractGraphService {
             // mouse, or simply an important note that should stay visible regardless
             const visibility = Math.max(camFactor, mouseFactor, importance);
 
-            el.style.opacity = clamp(0.1 + visibility * 0.8, 0.1, 0.95).toFixed(2);
-            el.style.fontSize = (0.4 + visibility * 0.6).toFixed(2) + 'rem';
+            el.style.opacity = (clamp(0.1 + visibility * 0.8, 0.1, 0.95) * zoomCap).toFixed(2);
+            el.style.fontSize = ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem';
         });
 
         this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);

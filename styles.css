@@ -53,14 +53,14 @@
 }
 
 .graph-3d-view .cluster-boundary-label {
-	font-size: 0.9rem;
+	font-size: 0.75rem;
 	font-weight: 700;
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
-	opacity: 0.8;
+	opacity: 0.35;
 	pointer-events: none;
 	white-space: nowrap;
-	text-shadow: 0 0 6px rgba(0, 0, 0, 0.7);
+	text-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
 }
 
 .graph-3d-view .scene-nav-info {

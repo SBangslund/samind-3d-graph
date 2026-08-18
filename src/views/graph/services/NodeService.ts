@@ -8,9 +8,14 @@ import Link from "src/graph/Link";
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { EventRef, WorkspaceLeaf } from "obsidian";
 import Graph from "src/graph/Graph";
+import { lighten } from "polished";
 
 // how close (screen px) the mouse needs to be to a label to boost its legibility
 const MOUSE_PROXIMITY_RADIUS_PX = 220;
+// hard cap on how many idle labels can be visible at once, regardless of how
+// many nodes fall within the proximity radius (keeps zoomed-out/dense
+// clusters readable instead of piling up overlapping text)
+const MAX_VISIBLE_LABELS = 6;
 
 const clamp = (value: number, min: number, max: number): number =>
     Math.min(max, Math.max(min, value));
@@ -58,6 +63,7 @@ export class NodeService extends AbstractGraphService {
             .nodeVisibility((node: Node) => this.isNodeVisible(node))
             .nodeThreeObject((node: Node) => this.createNodeThreeObject(node))
             .nodeThreeObjectExtend(true)
+            .onBackgroundClick(() => this.onRemove())
             .onBackgroundRightClick(() => this.onRemove())
             .onNodeRightClick((node: Node) => this.onNodeRightClick(node))
             .onNodeHover((node: Node) => this.onNodeHover(node));
@@ -157,6 +163,15 @@ export class NodeService extends AbstractGraphService {
         const zoomOutEnd = this.baselineCameraDistance * 2.8;
         const zoomCap = clamp(1 - (overallCamDist - zoomOutStart) / (zoomOutEnd - zoomOutStart), 0.12, 1);
 
+        // Gather every idle label within reveal range, then only actually
+        // show the closest few. A fixed screen-space radius alone isn't
+        // enough to keep this readable: zoomed out, a whole cluster can fit
+        // inside that radius at once, burying the cursor in overlapping
+        // text. Capping by count (not just distance) keeps it legible
+        // regardless of zoom level or how dense the cluster under the
+        // cursor is.
+        const candidates: { el: HTMLDivElement; screenDist: number }[] = [];
+
         this.labelElements.forEach((el, nodeId) => {
             const node = this.graph.getNodeById(nodeId);
             if (!node) {
@@ -171,15 +186,30 @@ export class NodeService extends AbstractGraphService {
             const { x, y, z } = runtimeNode;
             if (x === undefined || y === undefined || z === undefined) return;
 
-            let visibility = 0;
-            if (this.mouseScreenPos) {
-                const screenPos = this.instance.graph2ScreenCoords(x, y, z);
-                const sdx = screenPos.x - this.mouseScreenPos.x;
-                const sdy = screenPos.y - this.mouseScreenPos.y;
-                const screenDist = Math.sqrt(sdx * sdx + sdy * sdy);
-                visibility = clamp(1 - screenDist / MOUSE_PROXIMITY_RADIUS_PX, 0, 1);
+            if (!this.mouseScreenPos) {
+                el.style.opacity = '0';
+                return;
             }
 
+            const screenPos = this.instance.graph2ScreenCoords(x, y, z);
+            const sdx = screenPos.x - this.mouseScreenPos.x;
+            const sdy = screenPos.y - this.mouseScreenPos.y;
+            const screenDist = Math.sqrt(sdx * sdx + sdy * sdy);
+
+            if (screenDist > MOUSE_PROXIMITY_RADIUS_PX) {
+                el.style.opacity = '0';
+                return;
+            }
+            candidates.push({ el, screenDist });
+        });
+
+        candidates.sort((a, b) => a.screenDist - b.screenDist);
+        candidates.forEach(({ el, screenDist }, rank) => {
+            if (rank >= MAX_VISIBLE_LABELS) {
+                el.style.opacity = '0';
+                return;
+            }
+            const visibility = clamp(1 - screenDist / MOUSE_PROXIMITY_RADIUS_PX, 0, 1);
             el.style.opacity = (visibility * 0.9 * zoomCap).toFixed(2);
             el.style.fontSize = ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem';
         });
@@ -208,7 +238,7 @@ export class NodeService extends AbstractGraphService {
             }
             nodeEl.style.zIndex = '100';
         } else {
-            nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getNodeColor(node);
+            nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getLabelColor(node);
             nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
             nodeEl.style.zIndex = '';
             if (this.highlightService.getNodeSize() > 0) {
@@ -321,6 +351,18 @@ export class NodeService extends AbstractGraphService {
     private isNodeVisible(node: Node): boolean {
         return this.plugin.getSettings().filters.doShowOrphans || node.links.length > 0;
     };
+
+    // Label text uses a lightened version of the node's own color - using
+    // the exact same color made labels blend into their own node (and into
+    // other same-colored nodes nearby), especially against a dark background.
+    private getLabelColor(node: Node): string {
+        const color = this.getNodeColor(node);
+        try {
+            return lighten(0.22, color);
+        } catch {
+            return color;
+        }
+    }
 
     private getNodeColor(node: Node): string {
         let color = this.plugin.theme.textMuted;

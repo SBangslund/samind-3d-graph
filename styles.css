@@ -49,6 +49,7 @@
 
 .graph-3d-view .node-label {
 	color: var(--text-normal);
+	pointer-events: none;
 }
 
 .graph-3d-view .cluster-boundary-label {

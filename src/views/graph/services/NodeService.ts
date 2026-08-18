@@ -98,6 +98,10 @@ export class NodeService extends AbstractGraphService {
         // actually assigns state.layout - tickFrame can then run with
         // engineRunning true but state.layout still undefined and crash.
         this.instance.d3Force('cluster', this.createClusterForce() as never);
+        // extra global damping (default is ~0.4) so force changes - especially
+        // the sudden alpha=1 reheat on explode toggle - ease in rather than
+        // snap; works alongside the per-tick force magnitude caps below
+        this.instance.d3VelocityDecay(0.55);
 
         const rendererEl = this.instance.renderer().domElement;
         rendererEl.addEventListener('mousemove', this.onMouseMove);
@@ -106,12 +110,33 @@ export class NodeService extends AbstractGraphService {
     }
 
     // A custom d3-force: each tick, computes the current centroid of every
-    // AI cluster's member nodes and nudges each member's velocity toward it.
-    // Strength scales with alpha like every other d3 force, so it eases in
-    // during warmup/reheat and fades out as the simulation settles, instead
-    // of fighting the link/charge forces indefinitely.
+    // AI cluster's member nodes and pulls members back in once they've
+    // drifted beyond a target radius from it - a spring with a rest length,
+    // not a pull straight to the centroid. A pure linear pull-to-centroid
+    // has no equilibrium size of its own (it's just a tug-of-war against
+    // uniform charge repulsion), so its visual effect flips from
+    // "negligible" to "everything collapses to a point" over a very narrow
+    // strength range with no usable middle ground. Capping the pull to only
+    // the excess distance beyond CLUSTER_TARGET_RADIUS gives clusters an
+    // actual resting size: nodes already within it are left to the normal
+    // link/charge forces, only outliers get reeled back in.
     private createClusterForce() {
-        const CLUSTER_FORCE_STRENGTH = 0.7;
+        const CLUSTER_FORCE_STRENGTH = 4.5;
+        const CLUSTER_TARGET_RADIUS = 65;
+        // the exploded cluster is contained within a much bigger radius
+        // (loose leash, not a tight pull) while EXPLODE_REPULSION_STRENGTH
+        // below pushes its members apart from each other so they actually
+        // spread out to fill that space, rather than just drifting loose
+        const EXPLODED_TARGET_RADIUS = 420;
+        const EXPLODE_REPULSION_STRENGTH = 6000;
+        // both forces below are otherwise unbounded (linear spring / inverse
+        // square), so a node that's very far from centroid, or two exploded
+        // members that are still very close together, get a huge one-tick
+        // velocity kick instead of a gentle pull - capping the per-tick
+        // force magnitude turns that into a steady terminal-velocity-style
+        // approach instead of a violent snap
+        const MAX_CLUSTER_FORCE = 12;
+        const MAX_EXPLODE_FORCE = 12;
         let nodesRef: Node[] = [];
 
         type RuntimeNode = Node & {
@@ -138,6 +163,8 @@ export class NodeService extends AbstractGraphService {
                 c.x /= c.count; c.y /= c.count; c.z /= c.count;
             });
 
+            const explodedClusterId = this.clusterBoundaryService.getExplodedClusterId();
+
             nodesRef.forEach((n) => {
                 const rn = n as RuntimeNode;
                 if (rn.x === undefined || rn.y === undefined || rn.z === undefined) return;
@@ -145,10 +172,51 @@ export class NodeService extends AbstractGraphService {
                 if (!clusterId) return;
                 const centroid = centroids.get(clusterId);
                 if (!centroid) return;
-                rn.vx = (rn.vx ?? 0) + (centroid.x - rn.x) * CLUSTER_FORCE_STRENGTH * alpha;
-                rn.vy = (rn.vy ?? 0) + (centroid.y - rn.y) * CLUSTER_FORCE_STRENGTH * alpha;
-                rn.vz = (rn.vz ?? 0) + (centroid.z - rn.z) * CLUSTER_FORCE_STRENGTH * alpha;
+
+                const isExploded = clusterId === explodedClusterId;
+                const targetRadius = isExploded ? EXPLODED_TARGET_RADIUS : CLUSTER_TARGET_RADIUS;
+
+                const dx = rn.x - centroid.x, dy = rn.y - centroid.y, dz = rn.z - centroid.z;
+                const dist = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
+                const excess = dist - targetRadius;
+                if (excess > 0) {
+                    const forceMagnitude = Math.min(excess * CLUSTER_FORCE_STRENGTH, MAX_CLUSTER_FORCE) * alpha;
+                    const pull = forceMagnitude / dist;
+                    rn.vx = (rn.vx ?? 0) - dx * pull;
+                    rn.vy = (rn.vy ?? 0) - dy * pull;
+                    rn.vz = (rn.vz ?? 0) - dz * pull;
+                }
             });
+
+            // push the exploded cluster's members apart from each other -
+            // O(k^2) but k is a single cluster's member count (tens, not
+            // hundreds), trivial per tick
+            if (explodedClusterId) {
+                const members = nodesRef.filter(
+                    (n) => this.plugin.analysisService.getClusterId(n.id) === explodedClusterId
+                ) as RuntimeNode[];
+                for (let i = 0; i < members.length; i++) {
+                    const a = members[i];
+                    if (a.x === undefined || a.y === undefined || a.z === undefined) continue;
+                    for (let j = i + 1; j < members.length; j++) {
+                        const b = members[j];
+                        if (b.x === undefined || b.y === undefined || b.z === undefined) continue;
+
+                        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z;
+                        const distSq = Math.max(dx * dx + dy * dy + dz * dz, 1);
+                        const dist = Math.sqrt(distSq);
+                        const repel = Math.min((EXPLODE_REPULSION_STRENGTH * alpha) / distSq, MAX_EXPLODE_FORCE);
+                        const ux = dx / dist, uy = dy / dist, uz = dz / dist;
+
+                        a.vx = (a.vx ?? 0) - ux * repel;
+                        a.vy = (a.vy ?? 0) - uy * repel;
+                        a.vz = (a.vz ?? 0) - uz * repel;
+                        b.vx = (b.vx ?? 0) + ux * repel;
+                        b.vy = (b.vy ?? 0) + uy * repel;
+                        b.vz = (b.vz ?? 0) + uz * repel;
+                    }
+                }
+            }
         };
         (force as unknown as { initialize: (nodes: Node[]) => void }).initialize = (nodes: Node[]) => {
             nodesRef = nodes;
@@ -269,8 +337,14 @@ export class NodeService extends AbstractGraphService {
             && now - this.lastClusterHoverCheck >= CLUSTER_HOVER_CHECK_INTERVAL_MS) {
             this.lastClusterHoverCheck = now;
 
+            const titleHoveredClusterId = this.clusterBoundaryService.getTitleHoveredClusterId();
+
             let newHoveredClusterId: string | null;
-            if (closestNodeRef === null) {
+            if (titleHoveredClusterId !== null) {
+                // directly hovering a cluster's title takes priority over
+                // the proximity guess - it's an explicit, unambiguous signal
+                newHoveredClusterId = titleHoveredClusterId;
+            } else if (closestNodeRef === null) {
                 newHoveredClusterId = null;
             } else {
                 const globalClosestClusterId = this.plugin.analysisService.getClusterId(closestNodeRef.id);

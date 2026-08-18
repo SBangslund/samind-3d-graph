@@ -20,10 +20,10 @@ const MAX_VISIBLE_LABELS = 6;
 // how close (screen px) the mouse needs to be to the *nearest* node before
 // we consider its whole cluster "hovered"
 const CLUSTER_HOVER_RADIUS_PX = 90;
-// alpha used to fade nodes that aren't in the hovered cluster
-const CLUSTER_DIM_ALPHA = 0.12;
-// alpha used to fade nodes outside the hovered/focused neighbor set
-const NEIGHBOR_DIM_ALPHA = 0.25;
+// alpha used to fade nodes outside whatever's currently focused - the
+// hovered/inspected node's neighbor set, or (separately) the hovered
+// cluster. Shared so both interactions dim by the same amount.
+const DIM_ALPHA = 0.2;
 
 const clamp = (value: number, min: number, max: number): number =>
     Math.min(max, Math.max(min, value));
@@ -436,7 +436,7 @@ export class NodeService extends AbstractGraphService {
             return color;
         }
         if (this.highlightService.getNodeSize() > 0 && !this.highlightService.hasNode(node)) {
-            return this.toRgba(color, NEIGHBOR_DIM_ALPHA);
+            return this.toRgba(color, DIM_ALPHA);
         }
         // no specific node is hover/inspect-focused right now - if the
         // cursor is generally near a cluster, dim everything outside it so
@@ -444,7 +444,7 @@ export class NodeService extends AbstractGraphService {
         if (this.hoveredClusterId) {
             const nodeClusterId = this.plugin.analysisService.getClusterId(node.id);
             if (nodeClusterId !== this.hoveredClusterId) {
-                return this.toRgba(color, CLUSTER_DIM_ALPHA);
+                return this.toRgba(color, DIM_ALPHA);
             }
         }
         return color;

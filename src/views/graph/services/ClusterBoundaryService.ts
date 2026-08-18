@@ -104,7 +104,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
                     color: new THREE.Color(cluster.color),
                     wireframe: true,
                     transparent: true,
-                    opacity: 0.22,
+                    opacity: 0.08,
                 });
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.raycast = () => { /* never intercept pointer events */ };

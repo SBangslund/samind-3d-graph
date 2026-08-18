@@ -10,6 +10,7 @@ import { HighlightService } from "./services/HighlightService"
 import { LinkService } from "./services/LinkService"
 import { NodeService } from "./services/NodeService"
 import { SettingsService } from "./services/SettingsService"
+import { ClusterBoundaryService } from "./services/ClusterBoundaryService"
 
 // Adapted from https://github.com/vasturiano/3d-force-graph/blob/master/example/highlight/index.html
 // D3.js 3D Force Graph
@@ -26,6 +27,7 @@ export class ForceGraph {
 	private linkService: LinkService;
 	private nodeService: NodeService;
 	private settingsService: SettingsService;
+	private clusterBoundaryService: ClusterBoundaryService;
 
 	constructor(
 		plugin: Graph3dPlugin,
@@ -45,6 +47,7 @@ export class ForceGraph {
 		this.initServices();
 		this.nodeService.init();
 		this.linkService.init();
+		this.clusterBoundaryService.init();
 
 		// TODO: Add check for change sin search bar. This should then be reflected onto the graph.
 		/*setInterval(() => {
@@ -65,6 +68,7 @@ export class ForceGraph {
 		this.linkService = new LinkService(this.instance, this.plugin, this.highlightService);
 		this.nodeService = new NodeService(this.instance, this.plugin, this.highlightService, this.graph);
 		this.settingsService = new SettingsService(this.instance, this.plugin);
+		this.clusterBoundaryService = new ClusterBoundaryService(this.instance, this.plugin, this.graph);
 	}
 
 	private initInstance() {
@@ -114,5 +118,6 @@ export class ForceGraph {
 
 	public destroy(): void {
 		this.nodeService?.destroy();
+		this.clusterBoundaryService?.destroy();
 	}
 }

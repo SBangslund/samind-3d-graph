@@ -1,4 +1,4 @@
-import { Notice, Plugin } from "obsidian";
+import { Notice, Plugin, WorkspaceLeaf } from "obsidian";
 import { Graph3dView } from "./views/graph/Graph3dView";
 import GraphSettings from "./settings/GraphSettings";
 import State from "./util/State";
@@ -26,6 +26,11 @@ export default class Graph3dPlugin extends Plugin {
 	// Graphs that are waiting for cache to be ready
 	private queuedGraphs: Graph3dView[] = [];
 	private callbackUnregisterHandles: (() => void)[] = [];
+	// leaves we've opened, so we can force-close them on unload - otherwise
+	// a graph left open across a plugin reload/toggle keeps running with a
+	// stale module instance (its own copy of three.js, old closures, etc.),
+	// which collides with the freshly loaded instance
+	private openLeaves: WorkspaceLeaf[] = [];
 
 	async onload() {
 		await this.init();
@@ -189,6 +194,7 @@ export default class Graph3dPlugin extends Plugin {
 		const leaf = this.app.workspace.getLeaf(isLocalGraph ? "split" : false);
 		const graphView = new Graph3dView(this, leaf, isLocalGraph);
 		leaf.open(graphView);
+		this.openLeaves.push(leaf);
 		if (this.cacheIsReady.value) {
 			graphView.showGraph();
 		} else {
@@ -212,6 +218,8 @@ export default class Graph3dPlugin extends Plugin {
 
 	onunload() {
 		super.onunload();
+		this.openLeaves.forEach((leaf) => leaf.detach());
+		this.openLeaves = [];
 		this.callbackUnregisterHandles.forEach((handle) => handle());
 		EventBus.off("do-reset-settings", this.onDoResetSettings);
 	}

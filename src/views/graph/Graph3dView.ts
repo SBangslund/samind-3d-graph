@@ -21,6 +21,7 @@ export class Graph3dView extends ItemView {
 
 	onunload() {
 		super.onunload();
+		this.forceGraph?.destroy();
 		this.forceGraph?.getInstance()._destructor();
 	}
 

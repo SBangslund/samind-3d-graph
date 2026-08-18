@@ -111,4 +111,8 @@ export class ForceGraph {
 	getInstance(): ForceGraph3DInstance {
 		return this.instance;
 	}
+
+	public destroy(): void {
+		this.nodeService?.destroy();
+	}
 }

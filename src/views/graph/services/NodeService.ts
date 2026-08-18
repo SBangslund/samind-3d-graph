@@ -6,13 +6,34 @@ import { NodeGroup } from "src/settings/categories/GroupSettings";
 import Node from "src/graph/Node";
 import Link from "src/graph/Link";
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
-import { WorkspaceLeaf } from "obsidian";
+import { EventRef, WorkspaceLeaf } from "obsidian";
 import Graph from "src/graph/Graph";
+
+// how close (screen px) the mouse needs to be to a label to boost its legibility
+const MOUSE_PROXIMITY_RADIUS_PX = 220;
+
+const clamp = (value: number, min: number, max: number): number =>
+    Math.min(max, Math.max(min, value));
 
 export class NodeService extends AbstractGraphService {
 
     private hoveredNode: Node | null = null;
     private inspecting: boolean;
+
+    // idle-state labels, kept in sync so the visibility loop can update them
+    // in place instead of recreating DOM nodes every frame
+    private readonly labelElements: Map<string, HTMLDivElement> = new Map();
+    private mouseScreenPos: { x: number; y: number } | null = null;
+    private baselineCameraDistance: number | null = null;
+    private animationFrameId: number | null = null;
+    private readonly onMouseMove = (event: MouseEvent) => {
+        const rect = this.instance.renderer().domElement.getBoundingClientRect();
+        this.mouseScreenPos = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+    };
+    private readonly onMouseLeave = () => {
+        this.mouseScreenPos = null;
+    };
+    private activeLeafChangeRef: EventRef;
 
     constructor(
         instance: ForceGraph3DInstance,
@@ -23,7 +44,7 @@ export class NodeService extends AbstractGraphService {
     }
 
     public init(): void {
-        this.plugin.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf) => {
+        this.activeLeafChangeRef = this.plugin.app.workspace.on('active-leaf-change', (leaf: WorkspaceLeaf) => {
             let id = this.plugin.app.workspace.getActiveFile()?.path;
             if (id) {
                 let node = this.graph.getNodeById(id);
@@ -40,7 +61,74 @@ export class NodeService extends AbstractGraphService {
             .onBackgroundRightClick(() => this.onRemove())
             .onNodeRightClick((node: Node) => this.onNodeRightClick(node))
             .onNodeHover((node: Node) => this.onNodeHover(node));
+
+        const rendererEl = this.instance.renderer().domElement;
+        rendererEl.addEventListener('mousemove', this.onMouseMove);
+        rendererEl.addEventListener('mouseleave', this.onMouseLeave);
+        this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);
     }
+
+    public destroy(): void {
+        if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
+        const rendererEl = this.instance.renderer().domElement;
+        rendererEl.removeEventListener('mousemove', this.onMouseMove);
+        rendererEl.removeEventListener('mouseleave', this.onMouseLeave);
+        if (this.activeLeafChangeRef) this.plugin.app.workspace.offref(this.activeLeafChangeRef);
+        this.labelElements.clear();
+    }
+
+    // Continuously blends camera distance, on-screen proximity to the mouse,
+    // and note importance into each idle label's opacity/size, so overlapping
+    // labels declutter themselves: distant/unimportant notes fade and shrink,
+    // while nearby-to-camera, nearby-to-mouse, or high-importance notes stay legible.
+    private updateLabelVisibility = (): void => {
+        const camera = this.instance.camera();
+        const camPos = camera.position;
+
+        if (this.baselineCameraDistance === null) {
+            this.baselineCameraDistance = camPos.length() || 400;
+        }
+        const near = this.baselineCameraDistance * 0.4;
+        const far = this.baselineCameraDistance * 1.8;
+
+        this.labelElements.forEach((el, nodeId) => {
+            const node = this.graph.getNodeById(nodeId);
+            if (!node) {
+                this.labelElements.delete(nodeId);
+                return;
+            }
+            // don't fight the deliberate hover/inspect highlight styling
+            if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) return;
+            if (this.highlightService.getNodeSize() > 0) return;
+
+            const runtimeNode = node as unknown as { x?: number; y?: number; z?: number };
+            const { x, y, z } = runtimeNode;
+            if (x === undefined || y === undefined || z === undefined) return;
+
+            const dx = camPos.x - x, dy = camPos.y - y, dz = camPos.z - z;
+            const camDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            const camFactor = clamp(1 - (camDist - near) / (far - near), 0, 1);
+
+            let mouseFactor = 0;
+            if (this.mouseScreenPos) {
+                const screenPos = this.instance.graph2ScreenCoords(x, y, z);
+                const sdx = screenPos.x - this.mouseScreenPos.x;
+                const sdy = screenPos.y - this.mouseScreenPos.y;
+                const screenDist = Math.sqrt(sdx * sdx + sdy * sdy);
+                mouseFactor = clamp(1 - screenDist / MOUSE_PROXIMITY_RADIUS_PX, 0, 1);
+            }
+
+            const importance = this.plugin.analysisService.getImportance(node.id) ?? 0;
+            // whichever signal is strongest wins: close to camera, close to
+            // mouse, or simply an important note that should stay visible regardless
+            const visibility = Math.max(camFactor, mouseFactor, importance);
+
+            el.style.opacity = clamp(0.1 + visibility * 0.8, 0.1, 0.95).toFixed(2);
+            el.style.fontSize = (0.4 + visibility * 0.6).toFixed(2) + 'rem';
+        });
+
+        this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);
+    };
 
     private createNodeThreeObject(node: Node): CSS2DObject {
         const nodeEl = document.createElement('div');
@@ -85,11 +173,13 @@ export class NodeService extends AbstractGraphService {
 
         nodeEl.style.marginTop = '-.75rem';
         nodeEl.className = 'node-label';
+        this.labelElements.set(node.id, nodeEl);
         return new CSS2DObject(nodeEl);
     }
 
     private update(): void {
         this.highlightService.update();
+        this.labelElements.clear();
         this.instance.nodeThreeObject((node: Node) => this.createNodeThreeObject(node))
     }
 

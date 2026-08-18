@@ -1,3 +1,5 @@
+import { defineCustomElement } from "src/util/defineCustomElement";
+
 export type HtmlBuilder = (containerEl: HTMLElement) => void;
 
 // Collapsable tree item, imitates Obsidian's tree items
@@ -47,6 +49,4 @@ export class TreeItem extends HTMLDivElement {
 	};
 }
 
-if (typeof customElements.get("tree-item") === "undefined") {
-	customElements.define("tree-item", TreeItem, { extends: "div" });
-}
+defineCustomElement("tree-item", TreeItem, { extends: "div" });

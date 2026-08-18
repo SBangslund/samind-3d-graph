@@ -12,6 +12,7 @@ import GraphSettings from "src/settings/GraphSettings";
 import ObsidianTheme from "src/util/ObsidianTheme";
 import { AnalysisService } from "src/analysis/AnalysisService";
 import ClusterLegendView from "./categories/ClusterLegendView";
+import { defineCustomElement } from "src/util/defineCustomElement";
 
 export class GraphSettingsView extends HTMLDivElement {
 
@@ -154,8 +155,6 @@ export class GraphSettingsView extends HTMLDivElement {
 	}
 }
 
-if (typeof customElements.get("graph-settings-view") === "undefined") {
-	customElements.define("graph-settings-view", GraphSettingsView, {
-		extends: "div",
-	});
-}
+defineCustomElement("graph-settings-view", GraphSettingsView, {
+	extends: "div",
+});

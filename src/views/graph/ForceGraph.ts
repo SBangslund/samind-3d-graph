@@ -4,6 +4,7 @@ import Graph from "../../graph/Graph";
 import { rgba } from "polished";
 import EventBus from "../../util/EventBus";
 import { CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { Renderer } from "three";
 
 import { HighlightService } from "./services/HighlightService"
 import { LinkService } from "./services/LinkService"
@@ -71,7 +72,9 @@ export class ForceGraph {
 			this.rootHtmlElement.innerWidth,
 			this.rootHtmlElement.innerHeight,
 		];
-		this.instance = ForceGraph3D({ extraRenderers: [new CSS2DRenderer] })(this.rootHtmlElement)
+		// CSS2DRenderer's domElement is a <div>, not a <canvas>, so it can't satisfy
+		// three's Renderer type exactly; this is a known gap in the type definitions.
+		this.instance = ForceGraph3D({ extraRenderers: [new CSS2DRenderer as unknown as Renderer] })(this.rootHtmlElement)
 			.graphData(this.getGraphData())
 			.nodeRelSize(this.plugin.getSettings().display.nodeSize)
 			.backgroundColor(rgba(0, 0, 0, 0.25))

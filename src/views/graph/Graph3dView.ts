@@ -37,6 +37,10 @@ export class Graph3dView extends ItemView {
 				this.plugin.theme
 			);
 			viewContent.appendChild(settings);
+			// the pane's layout isn't finalized yet at this point (it was just
+			// shown/resized), so the initial width/height read by ForceGraph
+			// can be stale/tiny; re-measure once the browser has laid it out.
+			requestAnimationFrame(() => this.forceGraph.updateDimensions());
 		} else {
 			console.error("Could not find view content");
 		}

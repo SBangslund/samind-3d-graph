@@ -139,10 +139,9 @@ export class NodeService extends AbstractGraphService {
         this.labelElements.clear();
     }
 
-    // Continuously blends camera distance, on-screen proximity to the mouse,
-    // and note importance into each idle label's opacity/size, so overlapping
-    // labels declutter themselves: distant/unimportant notes fade and shrink,
-    // while nearby-to-camera, nearby-to-mouse, or high-importance notes stay legible.
+    // Idle labels are hidden entirely unless the mouse is close to them on
+    // screen - keeps a dense graph readable by only surfacing text where
+    // you're actually looking, instead of a permanent wall of overlapping names.
     private updateLabelVisibility = (): void => {
         const camera = this.instance.camera();
         const camPos = camera.position;
@@ -150,14 +149,9 @@ export class NodeService extends AbstractGraphService {
         if (this.baselineCameraDistance === null) {
             this.baselineCameraDistance = camPos.length() || 400;
         }
-        const near = this.baselineCameraDistance * 0.4;
-        const far = this.baselineCameraDistance * 1.8;
 
-        // global cap that shrinks/fades ALL labels together as the camera zooms
-        // out, regardless of importance - otherwise a handful of "important"
-        // labels can stay large enough to bury the graph shape entirely once
-        // zoomed out far. Importance/mouse proximity only compete for space
-        // within this budget, they can't exceed it.
+        // still cap how large a revealed label can get while zoomed way out,
+        // so hovering near a dense clump doesn't burst into oversized text
         const overallCamDist = camPos.length();
         const zoomOutStart = this.baselineCameraDistance * 1.1;
         const zoomOutEnd = this.baselineCameraDistance * 2.8;
@@ -177,25 +171,16 @@ export class NodeService extends AbstractGraphService {
             const { x, y, z } = runtimeNode;
             if (x === undefined || y === undefined || z === undefined) return;
 
-            const dx = camPos.x - x, dy = camPos.y - y, dz = camPos.z - z;
-            const camDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            const camFactor = clamp(1 - (camDist - near) / (far - near), 0, 1);
-
-            let mouseFactor = 0;
+            let visibility = 0;
             if (this.mouseScreenPos) {
                 const screenPos = this.instance.graph2ScreenCoords(x, y, z);
                 const sdx = screenPos.x - this.mouseScreenPos.x;
                 const sdy = screenPos.y - this.mouseScreenPos.y;
                 const screenDist = Math.sqrt(sdx * sdx + sdy * sdy);
-                mouseFactor = clamp(1 - screenDist / MOUSE_PROXIMITY_RADIUS_PX, 0, 1);
+                visibility = clamp(1 - screenDist / MOUSE_PROXIMITY_RADIUS_PX, 0, 1);
             }
 
-            const importance = this.plugin.analysisService.getImportance(node.id) ?? 0;
-            // whichever signal is strongest wins: close to camera, close to
-            // mouse, or simply an important note that should stay visible regardless
-            const visibility = Math.max(camFactor, mouseFactor, importance);
-
-            el.style.opacity = (clamp(0.1 + visibility * 0.8, 0.1, 0.95) * zoomCap).toFixed(2);
+            el.style.opacity = (visibility * 0.9 * zoomCap).toFixed(2);
             el.style.fontSize = ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem';
         });
 
@@ -223,7 +208,6 @@ export class NodeService extends AbstractGraphService {
             }
             nodeEl.style.zIndex = '100';
         } else {
-            const importance = this.plugin.analysisService.getImportance(node.id);
             nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getNodeColor(node);
             nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
             nodeEl.style.zIndex = '';
@@ -231,15 +215,11 @@ export class NodeService extends AbstractGraphService {
                 nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.05';
                 nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
             } else {
-                // idle state (nothing hovered): let importance drive legibility,
-                // so hub notes stay readable while the long tail stays out of the way
-                // (the per-frame visibility loop takes over from here)
-                nodeEl.style.opacity = importance !== null
-                    ? Math.min(0.15 + importance * 0.7, 0.9) + ''
-                    : '.15';
-                nodeEl.style.fontSize = importance !== null
-                    ? (0.45 + importance * 0.55) + 'rem'
-                    : '0.45rem';
+                // idle state (nothing hovered): hidden by default, the
+                // per-frame visibility loop reveals it only when the mouse
+                // gets close
+                nodeEl.style.opacity = '0';
+                nodeEl.style.fontSize = '0.4rem';
             }
         }
     }

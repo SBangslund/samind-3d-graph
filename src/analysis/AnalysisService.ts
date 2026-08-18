@@ -64,6 +64,10 @@ export class AnalysisService {
 		return counts;
 	}
 
+	getClusterId(path: string): string | null {
+		return this.data?.nodes[path]?.clusterId ?? null;
+	}
+
 	private getCluster(clusterId: string): AnalysisCluster | undefined {
 		return this.data?.clusters.find((c) => c.id === clusterId);
 	}

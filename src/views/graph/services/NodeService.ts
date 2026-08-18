@@ -62,10 +62,67 @@ export class NodeService extends AbstractGraphService {
             .onNodeRightClick((node: Node) => this.onNodeRightClick(node))
             .onNodeHover((node: Node) => this.onNodeHover(node));
 
+        // pull same-cluster notes toward each other so the AI clustering is
+        // spatially visible, not just color - otherwise cluster members can
+        // land anywhere in the layout since physics only follows real links
+        this.instance.d3Force('cluster', this.createClusterForce() as never);
+        this.instance.d3ReheatSimulation();
+
         const rendererEl = this.instance.renderer().domElement;
         rendererEl.addEventListener('mousemove', this.onMouseMove);
         rendererEl.addEventListener('mouseleave', this.onMouseLeave);
         this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);
+    }
+
+    // A custom d3-force: each tick, computes the current centroid of every
+    // AI cluster's member nodes and nudges each member's velocity toward it.
+    // Strength scales with alpha like every other d3 force, so it eases in
+    // during warmup/reheat and fades out as the simulation settles, instead
+    // of fighting the link/charge forces indefinitely.
+    private createClusterForce() {
+        const CLUSTER_FORCE_STRENGTH = 0.7;
+        let nodesRef: Node[] = [];
+
+        type RuntimeNode = Node & {
+            x?: number; y?: number; z?: number;
+            vx?: number; vy?: number; vz?: number;
+        };
+
+        const force = (alpha: number) => {
+            const centroids = new Map<string, { x: number; y: number; z: number; count: number }>();
+
+            nodesRef.forEach((n) => {
+                const rn = n as RuntimeNode;
+                if (rn.x === undefined || rn.y === undefined || rn.z === undefined) return;
+                const clusterId = this.plugin.analysisService.getClusterId(n.id);
+                if (!clusterId) return;
+                let c = centroids.get(clusterId);
+                if (!c) {
+                    c = { x: 0, y: 0, z: 0, count: 0 };
+                    centroids.set(clusterId, c);
+                }
+                c.x += rn.x; c.y += rn.y; c.z += rn.z; c.count++;
+            });
+            centroids.forEach((c) => {
+                c.x /= c.count; c.y /= c.count; c.z /= c.count;
+            });
+
+            nodesRef.forEach((n) => {
+                const rn = n as RuntimeNode;
+                if (rn.x === undefined || rn.y === undefined || rn.z === undefined) return;
+                const clusterId = this.plugin.analysisService.getClusterId(n.id);
+                if (!clusterId) return;
+                const centroid = centroids.get(clusterId);
+                if (!centroid) return;
+                rn.vx = (rn.vx ?? 0) + (centroid.x - rn.x) * CLUSTER_FORCE_STRENGTH * alpha;
+                rn.vy = (rn.vy ?? 0) + (centroid.y - rn.y) * CLUSTER_FORCE_STRENGTH * alpha;
+                rn.vz = (rn.vz ?? 0) + (centroid.z - rn.z) * CLUSTER_FORCE_STRENGTH * alpha;
+            });
+        };
+        (force as unknown as { initialize: (nodes: Node[]) => void }).initialize = (nodes: Node[]) => {
+            nodesRef = nodes;
+        };
+        return force;
     }
 
     public destroy(): void {

@@ -433,6 +433,13 @@ export class NodeService extends AbstractGraphService {
         }
 
         this.hoveredNode = node ?? null;
+        // three-forcegraph shows a pointer cursor not just while hovering a
+        // clickable node, but also over empty background as long as
+        // onBackgroundClick is registered (which we need for deselecting) -
+        // override it ourselves so the hand cursor only shows over a node.
+        // An inline style always wins over its class-based `.clickable`
+        // CSS rule, so this doesn't need to fight that mechanism.
+        this.instance.renderer().domElement.style.cursor = node ? 'pointer' : 'default';
         this.update();
     };
 

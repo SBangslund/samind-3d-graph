@@ -9,6 +9,19 @@
 	overflow: hidden !important;
 }
 
+/* three-forcegraph resets the canvas's inline cursor style every
+   animation frame and applies its own .clickable class whenever
+   onBackgroundClick is registered (which we need for deselecting),
+   showing a hand cursor over empty background too. !important on a
+   persistent class - not touched by that per-frame inline reset -
+   is what actually wins this instead of losing the race each frame. */
+.graph-3d-view canvas {
+	cursor: default !important;
+}
+.graph-3d-view canvas.samind-node-hovered {
+	cursor: pointer !important;
+}
+
 .graph-3d-view .graph-controls.is-collapsed > .graph-control-section {
 	display: none;
 	visibility: hidden;

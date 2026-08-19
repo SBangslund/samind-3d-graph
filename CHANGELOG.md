@@ -4,6 +4,8 @@ All notable changes to this plugin are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-08-19
+
 ### Added
 
 - First-run onboarding: a dismissible banner in the graph view when no AI analysis exists yet, with a step-by-step setup modal explaining how to generate one

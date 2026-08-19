@@ -1,9 +1,9 @@
 {
 	"id": "samind-graph",
 	"name": "Samind 3D Graph",
-	"version": "2.0.1",
+	"version": "2.0.2",
 	"minAppVersion": "0.15.0",
-	"description": "A 3D force-directed graph for Obsidian with AI-driven topic clustering and gap-insight analysis.",
+	"description": "A 3D force-directed graph with AI-driven topic clustering and gap-insight analysis.",
 	"author": "Samuel Bangslund",
 	"isDesktopOnly": true
 }

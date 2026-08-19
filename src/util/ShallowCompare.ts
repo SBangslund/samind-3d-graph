@@ -1,17 +1,21 @@
 // Shallow compare for nested objects
-/* eslint-disable @typescript-eslint/no-explicit-any */
-const shallowCompare = (obj1: any, obj2: any): boolean => {
-	if (!obj1 || !obj2) return obj1 == obj2;
+const shallowCompare = (obj1: unknown, obj2: unknown): boolean => {
+	if (!obj1 || !obj2) return obj1 === obj2;
 	else if (obj1 instanceof Object && obj2 instanceof Object) {
+		const keys1 = Object.keys(obj1);
+		const keys2 = Object.keys(obj2);
 		return (
-			Object.keys(obj1).length === Object.keys(obj2).length &&
-			Object.keys(obj1).every(
+			keys1.length === keys2.length &&
+			keys1.every(
 				(key) =>
-					obj2.hasOwnProperty(key) &&
-					shallowCompare(obj1[key], obj2[key])
+					Object.prototype.hasOwnProperty.call(obj2, key) &&
+					shallowCompare(
+						(obj1 as Record<string, unknown>)[key],
+						(obj2 as Record<string, unknown>)[key]
+					)
 			)
 		);
-	} else return obj1 == obj2;
+	} else return obj1 === obj2;
 };
 
 export default shallowCompare;

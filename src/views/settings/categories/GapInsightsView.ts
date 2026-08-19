@@ -46,7 +46,7 @@ const GapInsightsView = (
 		const headerEl = cardEl.createDiv({ cls: "gap-insight-header" });
 		[clusterA, clusterB].forEach((cluster, index) => {
 			const badge = headerEl.createSpan({ cls: "gap-insight-cluster-badge" });
-			badge.createSpan({ cls: "gap-insight-swatch" }).style.backgroundColor = cluster.color;
+			badge.createSpan({ cls: "gap-insight-swatch" }).setCssStyles({ backgroundColor: cluster.color });
 			badge.createSpan({ text: cluster.label });
 			if (index === 0) headerEl.createSpan({ cls: "gap-insight-arrow", text: "↔" });
 		});

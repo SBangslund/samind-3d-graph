@@ -2,6 +2,14 @@ import Link from "src/graph/Link";
 import Node from "src/graph/Node";
 import { AbstractGraphService } from "./AbstractGraphService";
 
+// Once the simulation has run, 3d-force-graph replaces a link's source/target
+// path strings with the actual resolved node objects - this is the shape link
+// callbacks (linkColor, linkWidth, ...) actually receive at runtime.
+export interface HydratedLinkObject {
+    source: { path: string };
+    target: { path: string };
+}
+
 export class HighlightService extends AbstractGraphService {
     private readonly links: Set<Link> = new Set();
     private readonly nodes: Set<string> = new Set();
@@ -31,7 +39,7 @@ export class HighlightService extends AbstractGraphService {
         this.parents.add(id);
     }
 
-    public hasLink(link: any): boolean {
+    public hasLink(link: HydratedLinkObject): boolean {
         let links = this.links.values();
         for (let index = 0; index < this.links.size; index++) {
             const element = links.next();

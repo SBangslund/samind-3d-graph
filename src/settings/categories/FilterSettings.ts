@@ -5,7 +5,7 @@ export class FilterSettings {
 		this.doShowOrphans = doShowOrphans ?? this.doShowOrphans;
 	}
 
-	public static fromStore(store: any) {
+	public static fromStore(store: Partial<FilterSettings> | undefined) {
 		return new FilterSettings(store?.doShowOrphans);
 	}
 

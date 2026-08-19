@@ -16,7 +16,7 @@ export class DisplaySettings {
 		this.particleCount = particleCount ?? this.particleCount;
 	}
 
-	public static fromStore(store: any) {
+	public static fromStore(store: Partial<DisplaySettings> | undefined) {
 		return new DisplaySettings(
 			store?.nodeSize,
 			store?.linkThickness,

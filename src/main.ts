@@ -81,7 +81,7 @@ export default class Graph3dPlugin extends Plugin {
 	private initListeners() {
 		this.callbackUnregisterHandles.push(
 			// save settings on change
-			this.settingsState.onChange(() => this.saveSettings())
+			this.settingsState.onChange(() => void this.saveSettings())
 		);
 
 		// internal event to reset settings to default
@@ -134,7 +134,6 @@ export default class Graph3dPlugin extends Plugin {
 	}
 
 	private onGraphCacheReady = () => {
-		console.info("Graph cache is ready");
 		this.cacheIsReady.value = true;
 		this.onGraphCacheChanged();
 	};
@@ -154,16 +153,6 @@ export default class Graph3dPlugin extends Plugin {
 				this.app.metadataCache.resolvedLinks
 			);
 			this.globalGraph = Graph.createFromApp(this.app);
-		} else {
-			console.info(
-				"changed but ",
-				this.cacheIsReady.value,
-				" and ",
-				shallowCompare(
-					this._resolvedCache,
-					this.app.metadataCache.resolvedLinks
-				)
-			);
 		}
 	};
 
@@ -209,10 +198,6 @@ export default class Graph3dPlugin extends Plugin {
 	}
 
 	async saveSettings() {
-		console.log(
-			"saveSettings:",
-			this.settingsState.getRawValue().toObject()
-		);
 		await this.saveData(this.settingsState.getRawValue().toObject());
 	}
 

@@ -4,9 +4,9 @@ import { AbstractGraphService } from "./AbstractGraphService";
 export class SettingsService extends AbstractGraphService {
 	public onSettingsStateChanged(data: StateChange) {
 		if (data.currentPath === "display.nodeSize") {
-			this.instance.nodeRelSize(data.newValue);
+			this.instance.nodeRelSize(data.newValue as number);
 		} else if (data.currentPath === "display.linkWidth") {
-			this.instance.linkWidth(data.newValue);
+			this.instance.linkWidth(data.newValue as number);
 		} else if (data.currentPath === "display.particleSize") {
 			this.instance.linkDirectionalParticleWidth(
 				this.plugin.getSettings().display.particleSize

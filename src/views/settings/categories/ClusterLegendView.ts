@@ -28,7 +28,7 @@ const ClusterLegendView = (
 		const percent = Math.round((count / total) * 100);
 		const itemEl = listEl.createDiv({ cls: "cluster-legend-item" });
 		const swatch = itemEl.createSpan({ cls: "cluster-legend-swatch" });
-		swatch.style.backgroundColor = cluster.color;
+		swatch.setCssStyles({ backgroundColor: cluster.color });
 		itemEl.createSpan({ cls: "cluster-legend-label", text: cluster.label });
 		itemEl.createSpan({
 			cls: "cluster-legend-count",

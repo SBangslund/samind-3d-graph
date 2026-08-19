@@ -1,6 +1,5 @@
-import Link from "src/graph/Link";
 import { AbstractGraphService } from "./AbstractGraphService";
-import { HighlightService } from "./HighlightService";
+import { HighlightService, HydratedLinkObject } from "./HighlightService";
 import { ForceGraph3DInstance } from "3d-force-graph";
 import Graph3dPlugin from "src/main";
 
@@ -16,19 +15,19 @@ export class LinkService extends AbstractGraphService {
     public init(): void {
         const settings = this.plugin.getSettings();
         this.instance
-            .linkColor((link: Link) => this.getLinkColor(link))
+            .linkColor((link: HydratedLinkObject) => this.getLinkColor(link))
             .linkDirectionalParticles(settings.display.particleCount)
-            .linkWidth((link: Link) => {
+            .linkWidth((link: HydratedLinkObject) => {
                 return this.highlightService.hasLink(link) ? 3 : settings.display.linkThickness;
             })
-            .linkDirectionalParticleWidth((link: Link) => {
+            .linkDirectionalParticleWidth((link: HydratedLinkObject) => {
                 return this.highlightService.hasLink(link) ? 3 : settings.display.particleSize;
             })
             .linkDirectionalParticleSpeed(0.006);
     }
 
 
-    private getLinkColor(link: Link): string {
+    private getLinkColor(link: HydratedLinkObject): string {
         return this.highlightService.getLinkSize() > 0
             ? (this.highlightService.hasLink(link)
                 // theme's --text-accent can be dark/muted depending on the

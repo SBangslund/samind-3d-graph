@@ -86,7 +86,7 @@ export class ForceGraph {
 			.height(height);
 	}
 
-	private refreshGraphData() {
+	private refreshGraphData = () => {
 		this.instance.graphData(this.getGraphData());
 	};
 

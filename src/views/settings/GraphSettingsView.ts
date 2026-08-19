@@ -84,8 +84,8 @@ export class GraphSettingsView extends HTMLDivElement {
 	private initListeners() {
 		EventBus.on("did-reset-settings", () => {
 			// Re append all settings
-			this.disconnectedCallback();
-			this.connectedCallback();
+			void this.disconnectedCallback();
+			void this.connectedCallback();
 		});
 		this.callbackUnregisterHandles.push(
 			this.isCollapsedState.onChange(this.onIsCollapsedChanged)
@@ -94,7 +94,7 @@ export class GraphSettingsView extends HTMLDivElement {
 
 	// clicked to collapse/expand
 	private onIsCollapsedChanged = (stateChange: StateChange) => {
-		const collapsed = stateChange.newValue;
+		const collapsed = stateChange.newValue as boolean;
 		this.toggleCollapsed(collapsed);
 	};
 
@@ -110,7 +110,6 @@ export class GraphSettingsView extends HTMLDivElement {
 	}
 
 	private onSettingsButtonClicked = () => {
-		console.log("settings button clicked");
 		this.isCollapsedState.value = !this.isCollapsedState.value;
 	};
 
@@ -134,9 +133,10 @@ export class GraphSettingsView extends HTMLDivElement {
 	}
 
 	private appendClusterLegend() {
-		const header = document.createElement("header");
-		header.classList.add("graph-control-section-header");
-		header.innerHTML = "Clusters (AI Analysis)";
+		const header = createEl("header", {
+			cls: "graph-control-section-header",
+			text: "Clusters (AI Analysis)",
+		});
 		const item = new TreeItem(header, [
 			(containerEl: HTMLElement) =>
 				ClusterLegendView(this.analysisService, containerEl),
@@ -146,9 +146,10 @@ export class GraphSettingsView extends HTMLDivElement {
 	}
 
 	private appendGapInsights() {
-		const header = document.createElement("header");
-		header.classList.add("graph-control-section-header");
-		header.innerHTML = "Gap Insights (AI Analysis)";
+		const header = createEl("header", {
+			cls: "graph-control-section-header",
+			text: "Gap Insights (AI Analysis)",
+		});
 		const item = new TreeItem(header, [
 			(containerEl: HTMLElement) =>
 				GapInsightsView(this.analysisService, this.onFocusClusters, containerEl),
@@ -163,9 +164,10 @@ export class GraphSettingsView extends HTMLDivElement {
 		title: string,
 		view: (setting: S, containerEl: HTMLElement) => void
 	) {
-		const header = document.createElement("header");
-		header.classList.add("graph-control-section-header");
-		header.innerHTML = title;
+		const header = createEl("header", {
+			cls: "graph-control-section-header",
+			text: title,
+		});
 		const item = new TreeItem(header, [
 			(containerEl: HTMLElement) => view(setting, containerEl),
 		]);

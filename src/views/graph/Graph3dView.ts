@@ -43,7 +43,7 @@ export class Graph3dView extends ItemView {
 			// the pane's layout isn't finalized yet at this point (it was just
 			// shown/resized), so the initial width/height read by ForceGraph
 			// can be stale/tiny; re-measure once the browser has laid it out.
-			requestAnimationFrame(() => this.forceGraph.updateDimensions());
+			window.requestAnimationFrame(() => this.forceGraph.updateDimensions());
 		} else {
 			console.error("Could not find view content");
 		}
@@ -78,12 +78,13 @@ export class Graph3dView extends ItemView {
 
 				if (clickedNodeFile) {
 					if (this.isLocalGraph) {
-						this.app.workspace
+						void this.app.workspace
 							.getLeaf(false)
 							.openFile(clickedNodeFile);
 					} else {
-						this.app.workspace.getLeaf().openFile(clickedNodeFile);
-						//this.leaf.openFile(clickedNodeFile);
+						void this.app.workspace
+							.getLeaf()
+							.openFile(clickedNodeFile);
 					}
 				}
 			});

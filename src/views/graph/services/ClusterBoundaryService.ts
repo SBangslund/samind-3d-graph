@@ -80,7 +80,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
     public init(): void {
         this.rebuild();
         this.intervalId = window.setInterval(() => this.rebuild(), REBUILD_INTERVAL_MS);
-        this.opacityAnimationFrameId = requestAnimationFrame(this.tickOpacity);
+        this.opacityAnimationFrameId = window.requestAnimationFrame(this.tickOpacity);
         const rendererEl = this.instance.renderer().domElement;
         rendererEl.addEventListener('dblclick', this.onCanvasDoubleClick);
         rendererEl.addEventListener('mousemove', this.onMouseMove);
@@ -89,7 +89,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
 
     public destroy(): void {
         if (this.intervalId !== null) window.clearInterval(this.intervalId);
-        if (this.opacityAnimationFrameId !== null) cancelAnimationFrame(this.opacityAnimationFrameId);
+        if (this.opacityAnimationFrameId !== null) window.cancelAnimationFrame(this.opacityAnimationFrameId);
         const rendererEl = this.instance.renderer().domElement;
         rendererEl.removeEventListener('dblclick', this.onCanvasDoubleClick);
         rendererEl.removeEventListener('mousemove', this.onMouseMove);
@@ -137,7 +137,9 @@ export class ClusterBoundaryService extends AbstractGraphService {
                     visibility = clamp(1 - dist / CLUSTER_TITLE_REVEAL_RADIUS_PX, 0, 1);
                 }
                 entry.targetBoxOpacity = visibility * BASE_BOX_OPACITY;
-                entry.label.element.style.opacity = (visibility * BASE_LABEL_OPACITY).toFixed(2);
+                entry.label.element.setCssStyles({
+                    opacity: (visibility * BASE_LABEL_OPACITY).toFixed(2),
+                });
             }
             // when a cluster IS hover-highlighted, applyHoverStyles already
             // set the right box/title opacity (hovered/dimmed) - leave it
@@ -146,7 +148,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
             const material = entry.box.material as THREE.LineDashedMaterial;
             material.opacity += (entry.targetBoxOpacity - material.opacity) * OPACITY_LERP_FACTOR;
         });
-        this.opacityAnimationFrameId = requestAnimationFrame(this.tickOpacity);
+        this.opacityAnimationFrameId = window.requestAnimationFrame(this.tickOpacity);
     };
 
     public getTitleHoveredClusterId(): string | null {
@@ -226,10 +228,10 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 // label opacity: left to tickOpacity's proximity check instead
             } else if (isActive) {
                 entry.targetBoxOpacity = HOVER_BOX_OPACITY;
-                entry.label.element.style.opacity = String(HOVER_LABEL_OPACITY);
+                entry.label.element.setCssStyles({ opacity: String(HOVER_LABEL_OPACITY) });
             } else {
                 entry.targetBoxOpacity = DIM_BOX_OPACITY;
-                entry.label.element.style.opacity = String(DIM_LABEL_OPACITY);
+                entry.label.element.setCssStyles({ opacity: String(DIM_LABEL_OPACITY) });
             }
         });
     }
@@ -391,13 +393,15 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 // is why zooming to one cluster was framing the whole graph
                 (line as unknown as { __graphObjType?: string }).__graphObjType = 'clusterBoundary';
 
-                const labelEl = document.createElement('div');
+                const labelEl = createDiv();
                 labelEl.className = 'cluster-boundary-label';
                 labelEl.textContent = cluster.label;
-                labelEl.style.color = cluster.color;
-                // hidden by default; tickOpacity reveals it based on mouse
-                // proximity once idle
-                labelEl.style.opacity = '0';
+                labelEl.setCssStyles({
+                    color: cluster.color,
+                    // hidden by default; tickOpacity reveals it based on
+                    // mouse proximity once idle
+                    opacity: '0',
+                });
                 // double-click, not single: these labels are small, faint,
                 // and there are many of them scattered around the scene, so
                 // a single click was too easy to trigger by accident while

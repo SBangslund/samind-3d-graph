@@ -7,7 +7,7 @@ export class GroupSettings {
 		this.groups = groups ?? this.groups;
 	}
 
-	public static fromStore(store: any) {
+	public static fromStore(store: Partial<GroupSettings> | undefined) {
 		return new GroupSettings(store?.groups);
 	}
 

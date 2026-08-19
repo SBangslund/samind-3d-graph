@@ -117,7 +117,7 @@ export class NodeService extends AbstractGraphService {
         const rendererEl = this.instance.renderer().domElement;
         rendererEl.addEventListener('mousemove', this.onMouseMove);
         rendererEl.addEventListener('mouseleave', this.onMouseLeave);
-        this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);
+        this.animationFrameId = window.requestAnimationFrame(this.updateLabelVisibility);
     }
 
     // A custom d3-force: each tick, computes the current centroid of every
@@ -262,7 +262,7 @@ export class NodeService extends AbstractGraphService {
     }
 
     public destroy(): void {
-        if (this.animationFrameId !== null) cancelAnimationFrame(this.animationFrameId);
+        if (this.animationFrameId !== null) window.cancelAnimationFrame(this.animationFrameId);
         const rendererEl = this.instance.renderer().domElement;
         rendererEl.removeEventListener('mousemove', this.onMouseMove);
         rendererEl.removeEventListener('mouseleave', this.onMouseLeave);
@@ -317,7 +317,7 @@ export class NodeService extends AbstractGraphService {
             if (activeClusterIds.length > 0) {
                 const nodeClusterId = this.plugin.analysisService.getClusterId(node.id);
                 if (!nodeClusterId || !activeClusterIds.includes(nodeClusterId)) {
-                    el.style.opacity = '0';
+                    el.setCssStyles({ opacity: '0' });
                     continue;
                 }
             }
@@ -327,7 +327,7 @@ export class NodeService extends AbstractGraphService {
             if (x === undefined || y === undefined || z === undefined) continue;
 
             if (!this.mouseScreenPos) {
-                el.style.opacity = '0';
+                el.setCssStyles({ opacity: '0' });
                 continue;
             }
 
@@ -337,7 +337,7 @@ export class NodeService extends AbstractGraphService {
             const screenDist = Math.sqrt(sdx * sdx + sdy * sdy);
 
             if (screenDist > MOUSE_PROXIMITY_RADIUS_PX) {
-                el.style.opacity = '0';
+                el.setCssStyles({ opacity: '0' });
                 continue;
             }
             candidates.push({ el, screenDist });
@@ -346,12 +346,14 @@ export class NodeService extends AbstractGraphService {
         candidates.sort((a, b) => a.screenDist - b.screenDist);
         candidates.forEach(({ el, screenDist }, rank) => {
             if (rank >= MAX_VISIBLE_LABELS) {
-                el.style.opacity = '0';
+                el.setCssStyles({ opacity: '0' });
                 return;
             }
             const visibility = clamp(1 - screenDist / MOUSE_PROXIMITY_RADIUS_PX, 0, 1);
-            el.style.opacity = (visibility * 0.9 * zoomCap).toFixed(2);
-            el.style.fontSize = ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem';
+            el.setCssStyles({
+                opacity: (visibility * 0.9 * zoomCap).toFixed(2),
+                fontSize: ((0.4 + visibility * 0.6) * zoomCap).toFixed(2) + 'rem',
+            });
         });
 
         // only a deliberate right-click pin (or a pinned gap-insight
@@ -402,7 +404,7 @@ export class NodeService extends AbstractGraphService {
             }
         }
 
-        this.animationFrameId = requestAnimationFrame(this.updateLabelVisibility);
+        this.animationFrameId = window.requestAnimationFrame(this.updateLabelVisibility);
     };
 
     // Applies the current highlight/hover/idle appearance to an already-mounted
@@ -414,41 +416,46 @@ export class NodeService extends AbstractGraphService {
         if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) {
             let index = this.highlightService.parentIndex(node);
             let opacity = 0.75 - (index * 5) / 100;
-            nodeEl.style.color = 'orange';
-            nodeEl.style.fontWeight = '500';
-            nodeEl.style.opacity = (opacity < 0.15 ? 0.15 : opacity) + '';
-            nodeEl.style.fontSize = '0.65rem';
-            nodeEl.style.zIndex = '100';
+            nodeEl.setCssStyles({
+                color: 'orange',
+                fontWeight: '500',
+                opacity: (opacity < 0.15 ? 0.15 : opacity) + '',
+                fontSize: '0.65rem',
+                zIndex: '100',
+            });
         } else {
-            nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getLabelColor(node);
-            nodeEl.style.fontWeight = this.hoveredNode === node ? '700' : '400';
-            nodeEl.style.zIndex = '';
+            nodeEl.setCssStyles({
+                color: this.hoveredNode === node ? this.plugin.theme.textAccent : this.getLabelColor(node),
+                fontWeight: this.hoveredNode === node ? '700' : '400',
+                zIndex: '',
+            });
             // only light up the whole highlighted set (hovered node + its
             // neighbors) when a specific node is genuinely focused; when
             // the highlight set is cluster-hover-driven instead, labels
             // keep using the proximity-declutter system below - a whole
             // cluster can be dozens of notes
             if (this.highlightService.getNodeSize() > 0 && this.isNodeFocusActive()) {
-                nodeEl.style.opacity = this.highlightService.hasNode(node) ? '1' : '0.05';
-                nodeEl.style.fontSize = this.highlightService.hasNode(node) ? '.75rem' : '0.45rem';
+                nodeEl.setCssStyles({
+                    opacity: this.highlightService.hasNode(node) ? '1' : '0.05',
+                    fontSize: this.highlightService.hasNode(node) ? '.75rem' : '0.45rem',
+                });
             } else {
                 // idle state (nothing hovered): hidden by default, the
                 // per-frame visibility loop reveals it only when the mouse
                 // gets close
-                nodeEl.style.opacity = '0';
-                nodeEl.style.fontSize = '0.4rem';
+                nodeEl.setCssStyles({ opacity: '0', fontSize: '0.4rem' });
             }
         }
     }
 
     private createNodeThreeObject(node: Node): CSS2DObject {
-        const nodeEl = document.createElement('div');
-        const match = node.id.match(/\/([^\/]+)\.(md|png)$/);
+        const nodeEl = createDiv();
+        const match = node.id.match(/\/([^/]+)\.(md|png)$/);
         nodeEl.textContent = match ? match[1] : node.id;
 
         this.styleLabel(node, nodeEl);
 
-        nodeEl.style.marginTop = '-.75rem';
+        nodeEl.setCssStyles({ marginTop: '-.75rem' });
         nodeEl.className = 'node-label';
         this.labelElements.set(node.id, nodeEl);
         return new CSS2DObject(nodeEl);
@@ -539,7 +546,7 @@ export class NodeService extends AbstractGraphService {
             return;
         }
 
-        (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
+        (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement)?.setCssStyles({ display: 'none' });
 
         this.highlightService.clear();
         // a real node hover/inspect always wins over a pinned gap-insight
@@ -576,7 +583,7 @@ export class NodeService extends AbstractGraphService {
     private inspectNode(node: Node | null, isPinnedByUser = false): void {
         this.inspecting = true;
         this.isPinnedByUser = isPinnedByUser;
-        (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement).style.display = 'none';
+        (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement)?.setCssStyles({ display: 'none' });
 
         this.highlightService.clear();
         // only a deliberate right-click pin should clear a pinned gap pair -

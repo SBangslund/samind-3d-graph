@@ -39,7 +39,7 @@ export default class Node {
 					}
 					return null;
 				})
-				.filter((node) => node !== null) as Node[],
+				.filter((node): node is Node => node !== null),
 			nodeMap,
 		];
 	}

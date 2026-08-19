@@ -27,7 +27,7 @@ export class ClusterPhysicsSettings {
 		this.interClusterRepulsionStrength = interClusterRepulsionStrength ?? this.interClusterRepulsionStrength;
 	}
 
-	public static fromStore(store: any) {
+	public static fromStore(store: Partial<ClusterPhysicsSettings> | undefined) {
 		return new ClusterPhysicsSettings(
 			store?.clusterTargetRadius,
 			store?.clusterForceStrength,

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import ObservableSlim from "observable-slim";
 
 // ====================================================== //
@@ -8,6 +7,13 @@ import ObservableSlim from "observable-slim";
 // Wrapper class to make any object/primitive observable
 
 export type StateListener = (changeData: StateChange) => void;
+
+// observable-slim ships no types; this is the shape of the proxy it
+// hands back from ObservableSlim.create().
+interface ObservableSlimProxy<T> {
+	__getTarget: T;
+	__getProxy: ProxyConstructor;
+}
 
 export default class State<T> {
 	private readonly listeners = new Map<number, StateListener>();
@@ -45,8 +51,8 @@ export default class State<T> {
 				currentPath: "",
 				jsonPointer: "",
 				target: this.val,
-				// @ts-ignore
-				proxy: (this.val as never).__getProxy,
+				proxy: (this.val as unknown as ObservableSlimProxy<T>)
+					.__getProxy,
 				previousValue,
 				newValue: this.val,
 			},
@@ -65,19 +71,24 @@ export default class State<T> {
 		key: string,
 		type: new (...a: never) => S
 	): State<S> {
-		const subStateKeys = key.split("."),
-			subStateValue: S = subStateKeys.reduce((obj: any, key: string) => {
-				const val = obj[key];
+		const subStateKeys = key.split(".");
+		const subStateValue: unknown = subStateKeys.reduce<unknown>(
+			(obj, key) => {
+				const val = (obj as Record<string, unknown>)[key];
 				if (val !== undefined) {
 					return val;
 				}
 				throw new InvalidStateKeyError(key, this);
-			}, this);
-		if (typeof subStateValue === "object") {
+			},
+			this
+		);
+		if (typeof subStateValue === "object" && subStateValue !== null) {
 			// check if is like generic type S
 			if (subStateValue instanceof type) {
-				// @ts-ignore
-				return new State(subStateValue.__getTarget);
+				return new State(
+					(subStateValue as unknown as ObservableSlimProxy<S>)
+						.__getTarget
+				);
 			} else {
 				throw new Error(
 					`Substate ${key} of state ${this.id} is not of type ${type.name}`
@@ -91,8 +102,8 @@ export default class State<T> {
 
 	public getRawValue(): T {
 		if (typeof this.val === "object") {
-			// @ts-ignore
-			return (this.val as unknown as ProxyConstructor).__getTarget;
+			return (this.val as unknown as ObservableSlimProxy<T>)
+				.__getTarget;
 		}
 		return this.val as T;
 	}
@@ -136,9 +147,9 @@ export interface StateChange {
 
 	currentPath: string; // path of the property
 	jsonPointer: string; // path as json pointer syntax
-	target: any; // the target object
+	target: unknown; // the target object
 	proxy?: ProxyConstructor; // the proxy of the object
 
-	previousValue?: any; // may be undefined if the property is new
-	newValue?: any; // may be undefined if the property is deleted
+	previousValue?: unknown; // may be undefined if the property is new
+	newValue?: unknown; // may be undefined if the property is deleted
 }

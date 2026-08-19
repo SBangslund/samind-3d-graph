@@ -21,7 +21,7 @@ export default class GraphSettings {
 		this.clusterPhysics = clusterPhysicsOptions;
 	}
 
-	public static fromStore(store: any) {
+	public static fromStore(store: Partial<GraphSettings> | undefined) {
 		return new GraphSettings(
 			FilterSettings.fromStore(store?.filters),
 			GroupSettings.fromStore(store?.groups),

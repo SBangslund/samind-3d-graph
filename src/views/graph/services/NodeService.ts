@@ -418,12 +418,6 @@ export class NodeService extends AbstractGraphService {
             nodeEl.style.fontWeight = '500';
             nodeEl.style.opacity = (opacity < 0.15 ? 0.15 : opacity) + '';
             nodeEl.style.fontSize = '0.65rem';
-            if (node.id.contains('Samind.md')) {
-                nodeEl.style.fontWeight = '800';
-                nodeEl.style.color = 'orange';
-                nodeEl.style.opacity = '1';
-                nodeEl.style.fontSize = '.85rem';
-            }
             nodeEl.style.zIndex = '100';
         } else {
             nodeEl.style.color = this.hoveredNode === node ? this.plugin.theme.textAccent : this.getLabelColor(node);

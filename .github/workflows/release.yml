@@ -7,7 +7,7 @@ on:
             - "*" # Push events to matching any tag format, i.e. 1.0, 20.15.10
 
 env:
-    PLUGIN_NAME: obisidian-3d-graph
+    PLUGIN_NAME: samind-3d-graph
 
 jobs:
     build:
@@ -37,7 +37,7 @@ jobs:
               id: create_release
               uses: actions/create-release@v1
               env:
-                  GITHUB_TOKEN: ${{ secrets.OBSIDIAN_3D_GRAPH_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   VERSION: ${{ github.ref }}
               with:
                   tag_name: ${{ github.ref }}
@@ -48,7 +48,7 @@ jobs:
               id: upload-zip
               uses: actions/upload-release-asset@v1
               env:
-                  GITHUB_TOKEN: ${{ secrets.OBSIDIAN_3D_GRAPH_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   upload_url: ${{ steps.create_release.outputs.upload_url }}
                   asset_path: ./${{ env.PLUGIN_NAME }}.zip
@@ -58,7 +58,7 @@ jobs:
               id: upload-main
               uses: actions/upload-release-asset@v1
               env:
-                  GITHUB_TOKEN: ${{ secrets.OBSIDIAN_3D_GRAPH_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   upload_url: ${{ steps.create_release.outputs.upload_url }}
                   asset_path: ./main.js
@@ -68,7 +68,7 @@ jobs:
               id: upload-manifest
               uses: actions/upload-release-asset@v1
               env:
-                  GITHUB_TOKEN: ${{ secrets.OBSIDIAN_3D_GRAPH_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   upload_url: ${{ steps.create_release.outputs.upload_url }}
                   asset_path: ./manifest.json
@@ -78,7 +78,7 @@ jobs:
               id: upload-css
               uses: actions/upload-release-asset@v1
               env:
-                  GITHUB_TOKEN: ${{ secrets.OBSIDIAN_3D_GRAPH_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               with:
                   upload_url: ${{ steps.create_release.outputs.upload_url }}
                   asset_path: ./styles.css

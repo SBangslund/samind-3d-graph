@@ -22,3 +22,6 @@ data.json
 .DS_Store
 
 .obsidian
+
+# dev-only hot-reload marker
+.hotreload

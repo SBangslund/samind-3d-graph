@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# get first argument
+# usage: ./copy_to_vault.sh /path/to/your/vault
 vault=$1
 
 # check if path exists
 if [ ! -d "$vault" ]; then
-    echo "Vault does not exist, did you change the path in package.json?"
-    exit 1  
+    echo "Usage: ./copy_to_vault.sh /path/to/your/vault"
+    exit 1
 fi
 
-plugin_path="$1/.obsidian/plugins/obsidian-note-linker"
+plugin_path="$1/.obsidian/plugins/samind-3d-graph"
 
 # create plugin directory if it does not exist
 
@@ -22,8 +22,6 @@ fi
 echo "Removing old plugin files in $vault"
 rm -rf "${plugin_path:?}"/*
 
-
-# copy ./manifest.json, ./styles.css and ./main.js to ~/Desktop/YouTube/.obsidian/plugins/obsidian-note-linker/
 
 echo "Copying new plugin files to $vault"
 cp ./manifest.json "$plugin_path"

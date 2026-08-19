@@ -17,7 +17,7 @@ Forked from [Obsidian 3D Graph](https://github.com/AlexW00/obsidian-3d-graph) by
 ### Installation
 
 To install manually:
-1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](../../releases/latest)
+1. Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](../../releases/latest) (see [CHANGELOG.md](CHANGELOG.md) for what's changed)
 2. Copy them into `<vault>/.obsidian/plugins/samind-graph/`
 3. Reload Obsidian and enable "Samind 3D Graph" under Community Plugins
 

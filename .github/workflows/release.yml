@@ -32,6 +32,21 @@ jobs:
             exit 1
           fi
 
+      - name: Extract changelog section for this tag
+        run: |
+          tag="${GITHUB_REF#refs/tags/}"
+          awk -v ver="$tag" '
+            /^## \[/ {
+              if (found) exit
+              if ($0 ~ "\\[" ver "\\]") { found=1; next }
+              next
+            }
+            found { print }
+          ' CHANGELOG.md > release_notes.md
+          if [ ! -s release_notes.md ]; then
+            echo "No CHANGELOG.md section found for [$tag] - see commit history for changes." > release_notes.md
+          fi
+
       - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -39,5 +54,5 @@ jobs:
           tag="${GITHUB_REF#refs/tags/}"
           gh release create "$tag" \
             --title "$tag" \
-            --notes "See commit history for changes." \
+            --notes-file release_notes.md \
             main.js manifest.json styles.css

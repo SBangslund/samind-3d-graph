@@ -182,7 +182,7 @@ export default class Graph3dPlugin extends Plugin {
 	private openGraph = (isLocalGraph: boolean) => {
 		const leaf = this.app.workspace.getLeaf(isLocalGraph ? "split" : false);
 		const graphView = new Graph3dView(this, leaf, isLocalGraph);
-		leaf.open(graphView);
+		void leaf.open(graphView);
 		this.openLeaves.push(leaf);
 		if (this.cacheIsReady.value) {
 			graphView.showGraph();
@@ -192,9 +192,10 @@ export default class Graph3dPlugin extends Plugin {
 	};
 
 	private async loadSettings(): Promise<GraphSettings> {
-		const loadedData = await this.loadData(),
-			settings = GraphSettings.fromStore(loadedData);
-		return settings;
+		const loadedData: unknown = await this.loadData();
+		return GraphSettings.fromStore(
+			loadedData as Partial<GraphSettings> | undefined
+		);
 	}
 
 	async saveSettings() {

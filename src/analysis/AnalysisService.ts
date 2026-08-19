@@ -21,7 +21,7 @@ export class AnalysisService {
 				return;
 			}
 			const raw = await this.app.vault.adapter.read(ANALYSIS_FILE_PATH);
-			const parsed = JSON.parse(raw);
+			const parsed: unknown = JSON.parse(raw);
 			if (!isAnalysisData(parsed)) {
 				console.warn(
 					"Samind 3D Graph: analysis.json is malformed, ignoring."

@@ -1,6 +1,6 @@
 {
 	"name": "samind-3d-graph",
-	"version": "2.0.3",
+	"version": "2.0.4",
 	"description": "A 3D graph for Obsidian",
 	"main": "main.js",
 	"scripts": {

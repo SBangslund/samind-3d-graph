@@ -52,7 +52,7 @@ export default class Graph3dPlugin extends Plugin {
 		});
 	}
 
-	private reloadAnalysis = async () => {
+	public reloadAnalysis = async () => {
 		await this.analysisService.load();
 		EventBus.trigger("graph-changed");
 		new Notice(

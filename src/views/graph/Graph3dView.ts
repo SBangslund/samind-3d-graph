@@ -2,12 +2,14 @@ import { ItemView, WorkspaceLeaf } from "obsidian";
 import Node from "../../graph/Node";
 import { ForceGraph } from "./ForceGraph";
 import { GraphSettingsView } from "../settings/GraphSettingsView";
+import { AnalysisBanner } from "./AnalysisBanner";
 import Graph3dPlugin from "src/main";
 
 export class Graph3dView extends ItemView {
 	private forceGraph: ForceGraph;
 	private readonly isLocalGraph: boolean;
 	private readonly plugin: Graph3dPlugin;
+	private unsubscribeAnalysisBanner: (() => void) | null = null;
 
 	constructor(
 		plugin: Graph3dPlugin,
@@ -23,6 +25,7 @@ export class Graph3dView extends ItemView {
 		super.onunload();
 		this.forceGraph?.destroy();
 		this.forceGraph?.getInstance()._destructor();
+		this.unsubscribeAnalysisBanner?.();
 	}
 
 	showGraph() {
@@ -40,6 +43,7 @@ export class Graph3dView extends ItemView {
 				(clusterIds) => this.forceGraph.focusOnClusters(clusterIds)
 			);
 			viewContent.appendChild(settings);
+			this.unsubscribeAnalysisBanner = AnalysisBanner(this.plugin, viewContent);
 			// the pane's layout isn't finalized yet at this point (it was just
 			// shown/resized), so the initial width/height read by ForceGraph
 			// can be stale/tiny; re-measure once the browser has laid it out.

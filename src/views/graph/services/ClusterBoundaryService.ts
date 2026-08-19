@@ -171,19 +171,37 @@ export class ClusterBoundaryService extends AbstractGraphService {
         );
         this.raycaster.setFromCamera(ndc, this.instance.camera());
 
-        let closestClusterId: string | null = null;
-        let closestDist = Infinity;
         const hitPoint = new THREE.Vector3();
+        const hits: { clusterId: string; bounds: THREE.Box3; dist: number }[] = [];
         this.boundaries.forEach((entry, clusterId) => {
             if (this.raycaster.ray.intersectBox(entry.bounds, hitPoint)) {
-                const dist = this.raycaster.ray.origin.distanceTo(hitPoint);
-                if (dist < closestDist) {
-                    closestDist = dist;
-                    closestClusterId = clusterId;
-                }
+                hits.push({
+                    clusterId,
+                    bounds: entry.bounds,
+                    dist: this.raycaster.ray.origin.distanceTo(hitPoint),
+                });
             }
         });
-        return closestClusterId;
+        if (hits.length === 0) return null;
+
+        // A box fully enclosed by another hit box would always lose on pure
+        // nearest-hit - the ray has to enter the outer box's near face
+        // before it can ever reach the inner one - making the inner cluster
+        // permanently unreachable whenever one cluster's box fully envelops
+        // another's. Drop any hit that itself contains another hit (there's
+        // a more specific box nested inside it that should win instead);
+        // nearest-hit among what's left still handles ordinary front/behind
+        // overlap, where no containment exists at all.
+        const innermost = hits.filter(
+            (hit) =>
+                !hits.some(
+                    (other) => other !== hit && hit.bounds.containsBox(other.bounds)
+                )
+        );
+        const candidates = innermost.length > 0 ? innermost : hits;
+        return candidates.reduce((closest, hit) =>
+            hit.dist < closest.dist ? hit : closest
+        ).clusterId;
     }
 
     // Called (cheaply) every frame by NodeService with whichever cluster the

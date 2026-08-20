@@ -14,9 +14,9 @@ import { ClusterBoundaryService } from "./ClusterBoundaryService";
 // how close (screen px) the mouse needs to be to a label to boost its legibility
 const MOUSE_PROXIMITY_RADIUS_PX = 220;
 const MAX_VISIBLE_LABELS = 6;
-// nodes above this importance threshold always show their label regardless
-// of mouse proximity — they are "landmarks" in the graph
-const LANDMARK_IMPORTANCE_THRESHOLD = 0.65;
+// how many nodes always show their label regardless of mouse proximity
+// (the top N by importance/link-count, so the most central notes read
+// as landmarks even without hovering)
 const MAX_LANDMARK_LABELS = 8;
 // alpha used to fade nodes outside whatever's currently focused - the
 // hovered/inspected node's neighbor set, or (separately) the hovered
@@ -311,7 +311,9 @@ export class NodeService extends AbstractGraphService {
         // regardless of zoom level or how dense the cluster under the
         // cursor is.
         const activeClusterIds = this.clusterBoundaryService.getActiveClusterIds();
-        const landmarkCandidates: { el: HTMLDivElement; importance: number }[] = [];
+        // in idle state all nodes feed into a pool; the top N by importance
+        // are shown always, the rest stay hidden until mouse-proximity reveals them
+        const landmarkPool: { el: HTMLDivElement; score: number }[] = [];
         const candidates: { el: HTMLDivElement; screenDist: number }[] = [];
 
         for (const [nodeId, el] of this.labelElements) {
@@ -335,15 +337,13 @@ export class NodeService extends AbstractGraphService {
             const { x, y, z } = runtimeNode;
             if (x === undefined || y === undefined || z === undefined) continue;
 
-            // high-importance nodes are always visible in idle state so the
-            // most central notes read as landmarks even without mouse interaction
-            const importance = this.plugin.analysisService.getImportance(node.id) ?? 0;
-            if (
-                importance >= LANDMARK_IMPORTANCE_THRESHOLD &&
-                activeClusterIds.length === 0 &&
-                !this.isNodeFocusActive()
-            ) {
-                landmarkCandidates.push({ el, importance });
+            // idle — collect every node into the landmark pool so the top N
+            // are always visible regardless of mouse position or score range
+            if (activeClusterIds.length === 0 && !this.isNodeFocusActive()) {
+                const aiScore = this.plugin.analysisService.getImportance(node.id);
+                // fall back to link count (normalised loosely) when no AI data
+                const score = aiScore !== null ? aiScore : node.links.length / 50;
+                landmarkPool.push({ el, score });
                 continue;
             }
 
@@ -364,16 +364,21 @@ export class NodeService extends AbstractGraphService {
             candidates.push({ el, screenDist });
         }
 
-        // always-visible landmark labels — top N by importance, fading with zoom
-        landmarkCandidates.sort((a, b) => b.importance - a.importance);
-        landmarkCandidates.forEach(({ el, importance }, rank) => {
+        // top N always visible, fading from 0.85 → 0.4 by rank; rest hidden
+        landmarkPool.sort((a, b) => b.score - a.score);
+        landmarkPool.forEach(({ el, score }, rank) => {
             if (rank >= MAX_LANDMARK_LABELS) {
                 el.setCssStyles({ opacity: '0' });
                 return;
             }
+            // scale both size and opacity by score so the most important
+            // notes are clearly the biggest labels in the graph
+            const t = 1 - rank / MAX_LANDMARK_LABELS; // 1.0 → ~0.125
+            const cappedScore = clamp(score, 0, 1);
             el.setCssStyles({
-                opacity: clamp(importance * 0.85 * zoomCap, 0, 1).toFixed(2),
-                fontSize: (clamp(0.45 + importance * 0.45, 0.45, 0.9) * zoomCap).toFixed(2) + 'rem',
+                opacity: clamp((0.55 + cappedScore * 0.4) * zoomCap, 0, 1).toFixed(2),
+                fontSize: (clamp(0.8 + t * 1.0, 0.8, 1.8) * zoomCap).toFixed(2) + 'rem',
+                fontWeight: t > 0.6 ? '700' : t > 0.3 ? '600' : '500',
             });
         });
 

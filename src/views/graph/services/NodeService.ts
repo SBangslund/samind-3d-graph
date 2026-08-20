@@ -616,8 +616,12 @@ export class NodeService extends AbstractGraphService {
         this.update();
     }
 
-    private checkRelations(id: string, recursive = false): void {
-        const nodeLinks = this.plugin.globalGraph.clone().getLinksWithNode(id);
+    private checkRelations(id: string, recursive = false, visited = new Set<string>()): void {
+        if (visited.has(id)) return;
+        visited.add(id);
+        // globalGraph is never passed to d3-force so its link source/target
+        // remain plain strings - no need to clone the entire graph here
+        const nodeLinks = this.plugin.globalGraph.getLinksWithNode(id);
 
         if (nodeLinks) {
             nodeLinks.reverse().forEach((link: Link) => {
@@ -628,7 +632,7 @@ export class NodeService extends AbstractGraphService {
                     if (recursive) {
                         this.highlightService.addLink(link);
                         this.highlightService.addParent(link.source);
-                        this.checkRelations(link.source, true);
+                        this.checkRelations(link.source, true, visited);
                     }
                 }
             });

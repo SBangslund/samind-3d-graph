@@ -16,15 +16,15 @@ const MIN_CLUSTER_SIZE = 2;
 // inflate the box to cover the whole scene
 const CLUSTER_BOX_OUTLIER_PERCENTILE = 0.85;
 
-const BASE_BOX_OPACITY = 0.35;
-const HOVER_BOX_OPACITY = 0.65;
-const DIM_BOX_OPACITY = 0.05;
-const BASE_FILL_OPACITY = 0.07;
-const HOVER_FILL_OPACITY = 0.18;
-const DIM_FILL_OPACITY = 0.02;
-const BASE_LABEL_OPACITY = 0.6;
-const HOVER_LABEL_OPACITY = 0.95;
-const DIM_LABEL_OPACITY = 0.08;
+const BASE_BOX_OPACITY = 0.55;
+const HOVER_BOX_OPACITY = 0.85;
+const DIM_BOX_OPACITY = 0.08;
+const BASE_FILL_OPACITY = 0.13;
+const HOVER_FILL_OPACITY = 0.28;
+const DIM_FILL_OPACITY = 0.03;
+const BASE_LABEL_OPACITY = 0.75;
+const HOVER_LABEL_OPACITY = 1.0;
+const DIM_LABEL_OPACITY = 0.12;
 // how much of the remaining distance to the target opacity to close per
 // frame - the box material isn't a DOM element, so CSS transitions can't
 // smooth it; this ease-toward-target loop does the same job by hand

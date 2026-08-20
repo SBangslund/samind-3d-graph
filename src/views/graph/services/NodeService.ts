@@ -261,6 +261,20 @@ export class NodeService extends AbstractGraphService {
         return force;
     }
 
+    // Called when the underlying graph data changes (e.g. orphan toggle,
+    // vault change) so that node lookups and the label loop stay in sync
+    // with what three-forcegraph is actually rendering.
+    public updateGraph(graph: Graph): void {
+        this.graph = graph;
+        // drop label elements for nodes that are no longer in the graph so
+        // the per-frame loop doesn't waste time on stale DOM entries
+        for (const nodeId of this.labelElements.keys()) {
+            if (!graph.getNodeById(nodeId)) {
+                this.labelElements.delete(nodeId);
+            }
+        }
+    }
+
     public destroy(): void {
         if (this.animationFrameId !== null) window.cancelAnimationFrame(this.animationFrameId);
         const rendererEl = this.instance.renderer().domElement;

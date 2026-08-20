@@ -87,6 +87,10 @@ export class ClusterBoundaryService extends AbstractGraphService {
         rendererEl.addEventListener('mouseleave', this.onMouseLeave);
     }
 
+    public updateGraph(graph: Graph): void {
+        this.graph = graph;
+    }
+
     public destroy(): void {
         if (this.intervalId !== null) window.clearInterval(this.intervalId);
         if (this.opacityAnimationFrameId !== null) window.cancelAnimationFrame(this.opacityAnimationFrameId);

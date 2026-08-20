@@ -57,7 +57,17 @@ export class ForceGraph {
 	}
 
 	private initListeners() {
-		this.plugin.settingsState.onChange((data) => this.settingsService.onSettingsStateChanged(data));
+		this.plugin.settingsState.onChange((data) => {
+			// toggling orphan visibility changes the node set itself, so we
+			// need a full graphData reload (removes/adds nodes from the
+			// simulation) rather than a cheap .refresh() which only re-runs
+			// visual callbacks on the existing node set
+			if (data.currentPath === 'filters.doShowOrphans') {
+				this.refreshGraphData();
+			} else {
+				this.settingsService.onSettingsStateChanged(data);
+			}
+		});
 		if (this.isLocalGraph)
 			this.plugin.openFileState.onChange(this.refreshGraphData);
 		EventBus.on("graph-changed", this.refreshGraphData);
@@ -88,6 +98,8 @@ export class ForceGraph {
 
 	private refreshGraphData = () => {
 		this.instance.graphData(this.getGraphData());
+		this.nodeService.updateGraph(this.graph);
+		this.clusterBoundaryService.updateGraph(this.graph);
 	};
 
 	public updateDimensions() {
@@ -107,6 +119,10 @@ export class ForceGraph {
 				.getLocalGraph(this.plugin.openFileState.value);
 		} else {
 			this.graph = this.plugin.globalGraph.clone();
+		}
+
+		if (!this.plugin.getSettings().filters.doShowOrphans) {
+			this.graph = this.graph.withoutOrphans();
 		}
 
 		return this.graph;

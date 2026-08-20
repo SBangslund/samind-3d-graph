@@ -116,6 +116,19 @@ export default class Graph {
 		}
 	}
 
+	// Returns a new graph containing only nodes that have at least one link.
+	// Orphan nodes are excluded from both the node list and all indexes.
+	public withoutOrphans(): Graph {
+		const nodes = this.nodes.filter((n) => n.links.length > 0);
+		const nodeIndex = new Map<string, number>();
+		nodes.forEach((n, i) => nodeIndex.set(n.id, i));
+		const links = this.links.filter(
+			(l) => nodeIndex.has(l.source) && nodeIndex.has(l.target)
+		);
+		const linkIndex = Link.createLinkIndex(links);
+		return new Graph(nodes, links, nodeIndex, linkIndex);
+	}
+
 	// Clones the graph
 	public clone = (): Graph => {
 		return new Graph(

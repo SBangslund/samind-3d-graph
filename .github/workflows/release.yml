@@ -55,4 +55,5 @@ jobs:
           gh release create "$tag" \
             --title "$tag" \
             --notes-file release_notes.md \
-            main.js manifest.json styles.css
+            main.js manifest.json styles.css \
+            skills/samind-graph-analysis/SKILL.md

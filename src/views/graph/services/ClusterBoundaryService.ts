@@ -10,33 +10,33 @@ const REBUILD_INTERVAL_MS = 600;
 const BOX_PADDING = 24;
 // below this many members, a box doesn't read as a meaningful region
 const MIN_CLUSTER_SIZE = 2;
+// nodes beyond this percentile of centroid-distance are treated as outliers
+// and excluded from the bounding-box calculation so one stray note can't
+// inflate the box to cover the whole scene
+const CLUSTER_BOX_OUTLIER_PERCENTILE = 0.85;
 
-const BASE_BOX_OPACITY = 0.2;
-const HOVER_BOX_OPACITY = 0.55;
-const DIM_BOX_OPACITY = 0.04;
-const BASE_LABEL_OPACITY = 0.35;
-const HOVER_LABEL_OPACITY = 0.85;
+const BASE_BOX_OPACITY = 0.35;
+const HOVER_BOX_OPACITY = 0.65;
+const DIM_BOX_OPACITY = 0.05;
+const BASE_FILL_OPACITY = 0.07;
+const HOVER_FILL_OPACITY = 0.18;
+const DIM_FILL_OPACITY = 0.02;
+const BASE_LABEL_OPACITY = 0.6;
+const HOVER_LABEL_OPACITY = 0.95;
 const DIM_LABEL_OPACITY = 0.08;
 // how much of the remaining distance to the target opacity to close per
 // frame - the box material isn't a DOM element, so CSS transitions can't
 // smooth it; this ease-toward-target loop does the same job by hand
 const OPACITY_LERP_FACTOR = 0.12;
 // how close (screen px) the mouse needs to be before an idle cluster title
-// reveals itself - deliberately much larger than node labels' radius (see
-// MOUSE_PROXIMITY_RADIUS_PX in NodeService): there are far fewer clusters
-// than notes, so they're worth noticing from farther away, and titles were
-// previously always-on regardless of distance, which read as too busy
-const CLUSTER_TITLE_REVEAL_RADIUS_PX = 450;
-
-const clamp = (value: number, min: number, max: number): number =>
-    Math.min(max, Math.max(min, value));
-
 type RuntimeNode = Node & { x?: number; y?: number; z?: number };
 
 interface BoundaryEntry {
     box: THREE.LineSegments;
+    fill: THREE.Mesh;
     label: CSS2DObject;
     targetBoxOpacity: number;
+    targetFillOpacity: number;
     bounds: THREE.Box3;
 }
 
@@ -130,27 +130,23 @@ export class ClusterBoundaryService extends AbstractGraphService {
     private tickOpacity = (): void => {
         this.boundaries.forEach((entry) => {
             if (this.getActiveClusterIds().length === 0) {
-                let visibility = 0;
-                if (this.mouseScreenPos) {
-                    const screenPos = this.instance.graph2ScreenCoords(
-                        entry.box.position.x, entry.box.position.y, entry.box.position.z
-                    );
-                    const dx = screenPos.x - this.mouseScreenPos.x;
-                    const dy = screenPos.y - this.mouseScreenPos.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    visibility = clamp(1 - dist / CLUSTER_TITLE_REVEAL_RADIUS_PX, 0, 1);
-                }
-                entry.targetBoxOpacity = visibility * BASE_BOX_OPACITY;
+                // idle: labels always visible so cluster names are readable
+                // without having to hunt with the mouse
+                entry.targetBoxOpacity = BASE_BOX_OPACITY;
+                entry.targetFillOpacity = BASE_FILL_OPACITY;
                 entry.label.element.setCssStyles({
-                    opacity: (visibility * BASE_LABEL_OPACITY).toFixed(2),
+                    opacity: String(BASE_LABEL_OPACITY),
                 });
             }
             // when a cluster IS hover-highlighted, applyHoverStyles already
-            // set the right box/title opacity (hovered/dimmed) - leave it
-            // alone here rather than fighting over it every frame
+            // set the right box/fill/title opacity (hovered/dimmed) - leave
+            // it alone here rather than fighting over it every frame
 
-            const material = entry.box.material as THREE.LineDashedMaterial;
-            material.opacity += (entry.targetBoxOpacity - material.opacity) * OPACITY_LERP_FACTOR;
+            const boxMat = entry.box.material as THREE.LineDashedMaterial;
+            boxMat.opacity += (entry.targetBoxOpacity - boxMat.opacity) * OPACITY_LERP_FACTOR;
+
+            const fillMat = entry.fill.material as THREE.MeshBasicMaterial;
+            fillMat.opacity += (entry.targetFillOpacity - fillMat.opacity) * OPACITY_LERP_FACTOR;
         });
         this.opacityAnimationFrameId = window.requestAnimationFrame(this.tickOpacity);
     };
@@ -247,12 +243,15 @@ export class ClusterBoundaryService extends AbstractGraphService {
             const isActive = activeIds.includes(clusterId);
             if (activeIds.length === 0) {
                 entry.targetBoxOpacity = BASE_BOX_OPACITY;
-                // label opacity: left to tickOpacity's proximity check instead
+                entry.targetFillOpacity = BASE_FILL_OPACITY;
+                // label opacity: left to tickOpacity's always-on idle path
             } else if (isActive) {
                 entry.targetBoxOpacity = HOVER_BOX_OPACITY;
+                entry.targetFillOpacity = HOVER_FILL_OPACITY;
                 entry.label.element.setCssStyles({ opacity: String(HOVER_LABEL_OPACITY) });
             } else {
                 entry.targetBoxOpacity = DIM_BOX_OPACITY;
+                entry.targetFillOpacity = DIM_FILL_OPACITY;
                 entry.label.element.setCssStyles({ opacity: String(DIM_LABEL_OPACITY) });
             }
         });
@@ -349,9 +348,12 @@ export class ClusterBoundaryService extends AbstractGraphService {
 
     private disposeEntry(scene: THREE.Scene, entry: BoundaryEntry): void {
         scene.remove(entry.box);
+        scene.remove(entry.fill);
         scene.remove(entry.label);
         entry.box.geometry.dispose();
         (entry.box.material as THREE.Material).dispose();
+        entry.fill.geometry.dispose();
+        (entry.fill.material as THREE.Material).dispose();
     }
 
     private rebuild = (): void => {
@@ -382,7 +384,23 @@ export class ClusterBoundaryService extends AbstractGraphService {
             if (!cluster) return;
             seenClusterIds.add(clusterId);
 
-            const box3 = new THREE.Box3().setFromPoints(points);
+            // Exclude outlier nodes from the box so a single stray note
+            // doesn't inflate it to cover the whole scene. Compute the
+            // centroid, sort nodes by their distance from it, then only
+            // include nodes within the configured percentile radius.
+            const centroid = new THREE.Vector3();
+            points.forEach((p) => centroid.add(p));
+            centroid.divideScalar(points.length);
+
+            const distances = points.map((p) => p.distanceTo(centroid));
+            const sortedDists = [...distances].sort((a, b) => a - b);
+            const cutoffIndex = Math.floor(sortedDists.length * CLUSTER_BOX_OUTLIER_PERCENTILE);
+            const maxRadius = sortedDists[cutoffIndex] ?? Infinity;
+            const corePoints = points.filter((_, i) => distances[i] <= maxRadius);
+
+            const box3 = new THREE.Box3().setFromPoints(
+                corePoints.length >= MIN_CLUSTER_SIZE ? corePoints : points
+            );
             box3.expandByScalar(BOX_PADDING);
             const size = new THREE.Vector3();
             box3.getSize(size);
@@ -420,9 +438,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 labelEl.textContent = cluster.label;
                 labelEl.setCssStyles({
                     color: cluster.color,
-                    // hidden by default; tickOpacity reveals it based on
-                    // mouse proximity once idle
-                    opacity: '0',
+                    opacity: String(BASE_LABEL_OPACITY),
                 });
                 // double-click, not single: these labels are small, faint,
                 // and there are many of them scattered around the scene, so
@@ -439,18 +455,36 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 const label = new CSS2DObject(labelEl);
                 (label as unknown as { __graphObjType?: string }).__graphObjType = 'clusterBoundary';
 
+                // Translucent filled volume so cluster territories read as
+                // distinct regions, not just a dashed outline. depthWrite:false
+                // prevents z-fighting with nodes that sit inside the volume.
+                const fillMaterial = new THREE.MeshBasicMaterial({
+                    color: new THREE.Color(cluster.color),
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide,
+                    depthWrite: false,
+                });
+                const fillMesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), fillMaterial);
+                fillMesh.renderOrder = -2;
+                (fillMesh as unknown as { __graphObjType?: string }).__graphObjType = 'clusterBoundary';
+
                 scene.add(line);
+                scene.add(fillMesh);
                 scene.add(label);
-                entry = { box: line, label, targetBoxOpacity: BASE_BOX_OPACITY, bounds: box3 };
+                entry = { box: line, fill: fillMesh, label, targetBoxOpacity: BASE_BOX_OPACITY, targetFillOpacity: BASE_FILL_OPACITY, bounds: box3 };
                 this.boundaries.set(clusterId, entry);
             } else {
                 entry.bounds = box3;
                 entry.box.geometry.dispose();
                 entry.box.geometry = edgesGeometry;
                 entry.box.computeLineDistances();
+                entry.fill.geometry.dispose();
+                entry.fill.geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
             }
 
             entry.box.position.copy(center);
+            entry.fill.position.copy(center);
             entry.label.position.set(center.x, box3.max.y, center.z);
         });
 

@@ -49,7 +49,10 @@ Field notes:
   (1 = most prominent/central topic in the vault). Used to scale label size in
   the graph — the most important clusters get larger, bolder labels.
 - `importance` on a **node** is a float normalized to the 0-1 range across the whole vault
-  (1 = most important/central note).
+  (1 = most important/central note). Nodes scoring **≥ 0.65** get a permanently
+  visible label in the graph regardless of mouse position — treat this as a high
+  bar. Aim for roughly the top 5–10% of notes to exceed it so the graph stays
+  readable; the rest are only labelled on mouse hover.
 - `clusterId` must reference an entry in `clusters`.
 - `color` should be a hex string; keep clusters visually distinct.
 - `gaps` is optional — omit it or leave it `[]` if you don't have enough

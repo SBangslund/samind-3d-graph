@@ -13,10 +13,11 @@ import { ClusterBoundaryService } from "./ClusterBoundaryService";
 
 // how close (screen px) the mouse needs to be to a label to boost its legibility
 const MOUSE_PROXIMITY_RADIUS_PX = 220;
-// hard cap on how many idle labels can be visible at once, regardless of how
-// many nodes fall within the proximity radius (keeps zoomed-out/dense
-// clusters readable instead of piling up overlapping text)
 const MAX_VISIBLE_LABELS = 6;
+// nodes above this importance threshold always show their label regardless
+// of mouse proximity — they are "landmarks" in the graph
+const LANDMARK_IMPORTANCE_THRESHOLD = 0.65;
+const MAX_LANDMARK_LABELS = 8;
 // alpha used to fade nodes outside whatever's currently focused - the
 // hovered/inspected node's neighbor set, or (separately) the hovered
 // cluster. Shared so both interactions dim by the same amount.
@@ -309,12 +310,9 @@ export class NodeService extends AbstractGraphService {
         // text. Capping by count (not just distance) keeps it legible
         // regardless of zoom level or how dense the cluster under the
         // cursor is.
-        const candidates: { el: HTMLDivElement; screenDist: number }[] = [];
-        // while a cluster is highlighted (hover, title-hover, or a pinned
-        // gap-insight pair), label-hover-reveal is restricted to notes
-        // actually within it - revealing OTHER, dimmed notes' labels while
-        // exploring a highlighted cluster read as noisy/inconsistent
         const activeClusterIds = this.clusterBoundaryService.getActiveClusterIds();
+        const landmarkCandidates: { el: HTMLDivElement; importance: number }[] = [];
+        const candidates: { el: HTMLDivElement; screenDist: number }[] = [];
 
         for (const [nodeId, el] of this.labelElements) {
             const node = this.graph.getNodeById(nodeId);
@@ -322,9 +320,6 @@ export class NodeService extends AbstractGraphService {
                 this.labelElements.delete(nodeId);
                 continue;
             }
-            // don't fight the deliberate hover/inspect highlight styling
-            // (but cluster-hover shares the same highlight set and should
-            // NOT suppress the proximity-based label system - see styleLabel)
             if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) continue;
             if (this.highlightService.getNodeSize() > 0 && this.isNodeFocusActive()) continue;
 
@@ -339,6 +334,18 @@ export class NodeService extends AbstractGraphService {
             const runtimeNode = node as unknown as { x?: number; y?: number; z?: number };
             const { x, y, z } = runtimeNode;
             if (x === undefined || y === undefined || z === undefined) continue;
+
+            // high-importance nodes are always visible in idle state so the
+            // most central notes read as landmarks even without mouse interaction
+            const importance = this.plugin.analysisService.getImportance(node.id) ?? 0;
+            if (
+                importance >= LANDMARK_IMPORTANCE_THRESHOLD &&
+                activeClusterIds.length === 0 &&
+                !this.isNodeFocusActive()
+            ) {
+                landmarkCandidates.push({ el, importance });
+                continue;
+            }
 
             if (!this.mouseScreenPos) {
                 el.setCssStyles({ opacity: '0' });
@@ -356,6 +363,19 @@ export class NodeService extends AbstractGraphService {
             }
             candidates.push({ el, screenDist });
         }
+
+        // always-visible landmark labels — top N by importance, fading with zoom
+        landmarkCandidates.sort((a, b) => b.importance - a.importance);
+        landmarkCandidates.forEach(({ el, importance }, rank) => {
+            if (rank >= MAX_LANDMARK_LABELS) {
+                el.setCssStyles({ opacity: '0' });
+                return;
+            }
+            el.setCssStyles({
+                opacity: clamp(importance * 0.85 * zoomCap, 0, 1).toFixed(2),
+                fontSize: (clamp(0.45 + importance * 0.45, 0.45, 0.9) * zoomCap).toFixed(2) + 'rem',
+            });
+        });
 
         candidates.sort((a, b) => a.screenDist - b.screenDist);
         candidates.forEach(({ el, screenDist }, rank) => {

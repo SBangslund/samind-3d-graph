@@ -13,6 +13,17 @@ const FilterSettingsView = (
 				filterSettings.value.doShowOrphans = value;
 			});
 	});
+
+	new Setting(containerEl)
+		.setName("Freeze Layout")
+		.setDesc("Stop the physics simulation so nodes stay put")
+		.addToggle((toggle) => {
+			toggle
+				.setValue(filterSettings.value.freezeLayout || false)
+				.onChange(async (value) => {
+					filterSettings.value.freezeLayout = value;
+				});
+		});
 };
 
 export default FilterSettingsView;

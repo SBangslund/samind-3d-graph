@@ -58,12 +58,15 @@ export class ForceGraph {
 
 	private initListeners() {
 		this.plugin.settingsState.onChange((data) => {
-			// toggling orphan visibility changes the node set itself, so we
-			// need a full graphData reload (removes/adds nodes from the
-			// simulation) rather than a cheap .refresh() which only re-runs
-			// visual callbacks on the existing node set
 			if (data.currentPath === 'filters.doShowOrphans') {
 				this.refreshGraphData();
+			} else if (data.currentPath === 'filters.freezeLayout') {
+				if (this.plugin.getSettings().filters.freezeLayout) {
+					this.instance.cooldownTicks(0);
+				} else {
+					this.instance.cooldownTicks(Infinity);
+					this.instance.d3ReheatSimulation();
+				}
 			} else if (data.currentPath === 'display.clusterShape') {
 				this.clusterBoundaryService.triggerRebuild();
 			} else {
@@ -95,14 +98,30 @@ export class ForceGraph {
 			.nodeRelSize(this.plugin.getSettings().display.nodeSize)
 			.backgroundColor(rgba(0, 0, 0, 0.25))
 			.width(width)
-			.height(height);
+			.height(height)
+			// reduce from the 15s default so the simulation settles faster
+			// when not frozen; freeze toggle overrides this via cooldownTicks(0)
+			.cooldownTime(8000);
 	}
 
 	private refreshGraphData = () => {
 		this.instance.graphData(this.getGraphData());
 		this.nodeService.updateGraph(this.graph);
 		this.clusterBoundaryService.updateGraph(this.graph);
+		// apply freeze AFTER the library's own deferred digest (which resets
+		// cooldownTicks internally) by deferring one more tick
+		if (this.plugin.getSettings().filters.freezeLayout) {
+			window.setTimeout(() => this.instance.cooldownTicks(0), 0);
+		}
 	};
+
+	private applyFreezeState(): void {
+		if (this.plugin.getSettings().filters.freezeLayout) {
+			this.instance.cooldownTicks(0);
+		} else {
+			this.instance.cooldownTicks(Infinity);
+		}
+	}
 
 	public updateDimensions() {
 		const [width, height] = [

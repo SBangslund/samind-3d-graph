@@ -64,6 +64,8 @@ export class ForceGraph {
 			// visual callbacks on the existing node set
 			if (data.currentPath === 'filters.doShowOrphans') {
 				this.refreshGraphData();
+			} else if (data.currentPath === 'display.clusterShape') {
+				this.clusterBoundaryService.triggerRebuild();
 			} else {
 				this.settingsService.onSettingsStateChanged(data);
 			}

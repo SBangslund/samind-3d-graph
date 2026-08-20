@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
 import { ForceGraph3DInstance } from "3d-force-graph";
 import { AbstractGraphService } from "./AbstractGraphService";
 import Graph3dPlugin from "src/main";
@@ -89,6 +90,10 @@ export class ClusterBoundaryService extends AbstractGraphService {
 
     public updateGraph(graph: Graph): void {
         this.graph = graph;
+    }
+
+    public triggerRebuild(): void {
+        this.rebuild();
     }
 
     public destroy(): void {
@@ -407,9 +412,28 @@ export class ClusterBoundaryService extends AbstractGraphService {
             const center = new THREE.Vector3();
             box3.getCenter(center);
 
-            const boxGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-            const edgesGeometry = new THREE.EdgesGeometry(boxGeometry);
-            boxGeometry.dispose();
+            const boxGeom = new THREE.BoxGeometry(size.x, size.y, size.z);
+            let edgesGeometry: THREE.BufferGeometry;
+            let fillGeometry: THREE.BufferGeometry;
+
+            const shape = this.plugin.getSettings().display.clusterShape;
+            if (shape === 'convex' && corePoints.length >= 4) {
+                try {
+                    const hullGeom = new ConvexGeometry(corePoints);
+                    edgesGeometry = new THREE.EdgesGeometry(hullGeom);
+                    fillGeometry = hullGeom;
+                    boxGeom.dispose();
+                } catch {
+                    // coplanar points or degenerate hull — fall back to box
+                    edgesGeometry = new THREE.EdgesGeometry(boxGeom);
+                    boxGeom.dispose();
+                    fillGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+                }
+            } else {
+                edgesGeometry = new THREE.EdgesGeometry(boxGeom);
+                boxGeom.dispose();
+                fillGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+            }
 
             let entry = this.boundaries.get(clusterId);
             if (!entry) {
@@ -465,7 +489,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
                     side: THREE.DoubleSide,
                     depthWrite: false,
                 });
-                const fillMesh = new THREE.Mesh(new THREE.BoxGeometry(size.x, size.y, size.z), fillMaterial);
+                const fillMesh = new THREE.Mesh(fillGeometry, fillMaterial);
                 fillMesh.renderOrder = -2;
                 (fillMesh as unknown as { __graphObjType?: string }).__graphObjType = 'clusterBoundary';
 
@@ -480,7 +504,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 entry.box.geometry = edgesGeometry;
                 entry.box.computeLineDistances();
                 entry.fill.geometry.dispose();
-                entry.fill.geometry = new THREE.BoxGeometry(size.x, size.y, size.z);
+                entry.fill.geometry = fillGeometry;
             }
 
             entry.box.position.copy(center);

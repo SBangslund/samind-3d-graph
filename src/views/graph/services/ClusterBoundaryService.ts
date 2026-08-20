@@ -419,7 +419,10 @@ export class ClusterBoundaryService extends AbstractGraphService {
             const shape = this.plugin.getSettings().display.clusterShape;
             if (shape === 'convex' && corePoints.length >= 4) {
                 try {
-                    const hullGeom = new ConvexGeometry(corePoints);
+                    // ConvexGeometry vertices must be centroid-relative so the
+                    // mesh sits correctly when positioned at `center` below
+                    const localPoints = corePoints.map((p) => p.clone().sub(center));
+                    const hullGeom = new ConvexGeometry(localPoints);
                     edgesGeometry = new THREE.EdgesGeometry(hullGeom);
                     fillGeometry = hullGeom;
                     boxGeom.dispose();

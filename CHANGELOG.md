@@ -4,6 +4,10 @@ All notable changes to this plugin are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+### Fixed
+
+- Release workflow now includes `SKILL.md` as a release asset
+
 ## [2.1.0] - 2026-08-19
 
 ### Added

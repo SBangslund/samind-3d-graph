@@ -6,6 +6,10 @@ export interface AnalysisCluster {
 	id: string;
 	label: string;
 	color: string;
+	// normalized 0-1 score for the cluster's overall prominence in the vault;
+	// higher = larger, bolder label in the graph. Falls back to note-count
+	// normalization when absent (older analysis files).
+	importance?: number;
 }
 
 export interface AnalysisNodeEntry {

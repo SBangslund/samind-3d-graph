@@ -91,4 +91,16 @@ export class AnalysisService {
 		const entry = this.data?.nodes[path];
 		return entry?.importance ?? null;
 	}
+
+	// Returns the cluster's own importance score (0-1). If the analysis file
+	// doesn't carry one (older files), falls back to normalizing note count
+	// across all clusters so the most-populated cluster scores 1.0.
+	getClusterImportance(clusterId: string): number {
+		const cluster = this.getCluster(clusterId);
+		if (!cluster) return 0;
+		if (cluster.importance !== undefined) return cluster.importance;
+		const counts = this.getClusterNoteCounts();
+		const maxCount = Math.max(...Object.values(counts), 1);
+		return (counts[clusterId] ?? 0) / maxCount;
+	}
 }

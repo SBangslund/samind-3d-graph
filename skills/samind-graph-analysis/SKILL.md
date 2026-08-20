@@ -24,8 +24,8 @@ own code — it is vault data, not plugin data.
   "generatedAt": "2026-08-18T12:34:56Z",
   "generatedBy": "claude (semantic analysis)",
   "clusters": [
-    { "id": "c1", "label": "Machine Learning", "color": "#4f8fd1" },
-    { "id": "c2", "label": "Personal Journaling", "color": "#d1774f" }
+    { "id": "c1", "label": "Machine Learning", "color": "#4f8fd1", "importance": 0.85 },
+    { "id": "c2", "label": "Personal Journaling", "color": "#d1774f", "importance": 0.42 }
   ],
   "nodes": {
     "Ideas/VR Learning Platform.md": { "clusterId": "c1", "importance": 0.82 },
@@ -45,7 +45,10 @@ Field notes:
 - `nodes` keys are vault-relative file paths **exactly** as Obsidian would
   report them (forward slashes, no leading `./`, case-sensitive, including
   the `.md` extension). This must match `TFile.path`.
-- `importance` is a float normalized to the 0-1 range across the whole vault
+- `importance` on a **cluster** is a float normalized to 0-1 across all clusters
+  (1 = most prominent/central topic in the vault). Used to scale label size in
+  the graph — the most important clusters get larger, bolder labels.
+- `importance` on a **node** is a float normalized to the 0-1 range across the whole vault
   (1 = most important/central note).
 - `clusterId` must reference an entry in `clusters`.
 - `color` should be a hex string; keep clusters visually distinct.
@@ -71,9 +74,17 @@ Field notes:
    human-readable label. This is the part a pure graph algorithm can't do
    well: use your judgment about what the notes are actually *about*, not
    just folder structure or link density.
-5. **Score importance.** Combine link centrality (in-links + out-links,
-   normalized) with your own judgment of how conceptually central a note is
-   to its cluster or to the vault as a whole. Normalize to 0-1.
+5. **Score importance.** Compute two separate importance scores:
+   - **Per-node** (`nodes[path].importance`): combine link centrality (in-links +
+     out-links, normalized) with your own judgment of how conceptually central a
+     note is to its cluster or to the vault as a whole. Normalize to 0-1 across
+     all notes.
+   - **Per-cluster** (`clusters[n].importance`): reflect the cluster's overall
+     prominence in the vault — consider note count, total link weight into/out of
+     the cluster, and how central its topic is to the vault's main themes.
+     Normalize to 0-1 across all clusters (the most prevalent topic scores 1.0).
+     This is used to make the most important cluster labels larger and bolder in
+     the graph.
 6. **Find gaps.** Look for pairs of clusters that are thematically related
    but structurally under-connected (few or no links between their notes).
    For each real gap you find, write one concrete insight and one concrete

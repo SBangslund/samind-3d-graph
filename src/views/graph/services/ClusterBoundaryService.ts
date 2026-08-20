@@ -472,9 +472,17 @@ export class ClusterBoundaryService extends AbstractGraphService {
                 const labelEl = createDiv();
                 labelEl.className = 'cluster-boundary-label';
                 labelEl.textContent = cluster.label;
+
+                // scale label prominence by cluster importance so the most
+                // prevalent topics stand out at a glance
+                const importance = this.plugin.analysisService.getClusterImportance(clusterId);
+                const fontSize = importance > 0.65 ? '0.9rem' : importance > 0.35 ? '0.75rem' : '0.6rem';
+                const fontWeight = importance > 0.65 ? '700' : importance > 0.35 ? '500' : '400';
                 labelEl.setCssStyles({
                     color: cluster.color,
                     opacity: String(BASE_LABEL_OPACITY),
+                    fontSize,
+                    fontWeight,
                 });
                 // double-click, not single: these labels are small, faint,
                 // and there are many of them scattered around the scene, so

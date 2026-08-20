@@ -271,6 +271,7 @@ export class ClusterBoundaryService extends AbstractGraphService {
     // reads getExplodedClusterId() every tick) instead of moving the
     // camera directly.
     private toggleExplode(clusterId: string): void {
+        if (this.plugin.getSettings().filters.freezeLayout) return;
         const isExploding = this.explodedClusterId !== clusterId;
         this.explodedClusterId = isExploding ? clusterId : null;
         // the simulation has almost certainly cooled down and stopped
@@ -417,11 +418,19 @@ export class ClusterBoundaryService extends AbstractGraphService {
             let fillGeometry: THREE.BufferGeometry;
 
             const shape = this.plugin.getSettings().display.clusterShape;
-            if (shape === 'convex' && corePoints.length >= 4) {
+            if (shape === 'convex' && corePoints.length >= 2) {
                 try {
                     // ConvexGeometry vertices must be centroid-relative so the
-                    // mesh sits correctly when positioned at `center` below
-                    const localPoints = corePoints.map((p) => p.clone().sub(center));
+                    // mesh sits correctly when positioned at `center` below.
+                    // Push each point outward by BOX_PADDING so the hull
+                    // extends slightly beyond its nodes and is easy to click.
+                    const localPoints = corePoints.map((p) => {
+                        const local = p.clone().sub(center);
+                        const len = local.length();
+                        return len > 0.001
+                            ? local.multiplyScalar(1 + BOX_PADDING / len)
+                            : local;
+                    });
                     const hullGeom = new ConvexGeometry(localPoints);
                     edgesGeometry = new THREE.EdgesGeometry(hullGeom);
                     fillGeometry = hullGeom;

@@ -4,9 +4,32 @@ All notable changes to this plugin are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-20
+
+### Added
+
+- **Convex hull cluster boundaries** — clusters now wrap their actual node positions instead of an axis-aligned box; switchable back to box via a new *Cluster Shape* dropdown in Display settings
+- **Translucent cluster fill** — a coloured semi-transparent volume inside each boundary makes cluster territories immediately readable at a glance
+- **Freeze Layout toggle** — stops the physics simulation so nodes stay put; re-enabling it reheats the simulation. Double-clicking a cluster to explode it is also blocked while frozen
+- **Landmark node labels** — the top 8 most important nodes always show their label regardless of mouse position, sized and weighted by their importance score (falls back to link count when no AI analysis is loaded)
+- **Cluster importance score** (`importance` field on clusters in `analysis.json`) — drives label font size and weight so the most prevalent topics stand out; the AI skill has been updated to generate this field
+- **Always-visible cluster labels** — cluster labels are now permanently visible at base opacity instead of only appearing on mouse hover
+
+### Changed
+
+- Cluster boundary opacity raised significantly (box 0.35→0.55, fill 0.07→0.13, label 0.6→0.75) for better readability
+- Convex hull expands beyond its nodes by `BOX_PADDING` so the boundary is easier to hover and click
+- Minimum node count for convex hull lowered from 4 to 2 (degenerate cases fall back to box automatically)
+- Physics simulation default `cooldownTime` reduced from 15 s to 8 s for faster settling
+
 ### Fixed
 
 - Release workflow now includes `SKILL.md` as a release asset
+- Clicking a node in a highlighted cluster caused severe lag — `checkRelations` was cloning the entire graph on every recursive ancestor step; it now reads the source graph directly and a `visited` guard prevents infinite loops on bidirectional links
+- Node click file lookup was O(n) (`vault.getFiles().find()`); now O(1) via `vault.getFileByPath()`
+- Convex hull was offset because vertices were in world space but then repositioned by the cluster centroid; vertices are now centroid-relative before hull construction
+- Orphan nodes were kept in the physics simulation even when hidden (only `nodeVisibility` hid them visually); they are now excluded from `graphData` entirely, removing their simulation and render cost
+- Exploding a cluster no longer reheats the simulation when *Freeze Layout* is on
 
 ## [2.1.0] - 2026-08-19
 

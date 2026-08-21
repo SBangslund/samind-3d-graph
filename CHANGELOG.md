@@ -4,6 +4,12 @@ All notable changes to this plugin are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+## [2.2.1] - 2026-08-21
+
+### Fixed
+
+- `minAppVersion` was still declared as `1.2.3`, but 2.2.0's `getFileByPath()` node-click lookup requires `1.5.7` - bumped to match
+
 ## [2.2.0] - 2026-08-20
 
 ### Added

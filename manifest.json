@@ -1,9 +1,9 @@
 {
 	"id": "samind-graph",
 	"name": "Samind 3D Graph",
-	"minAppVersion": "1.2.3",
+	"minAppVersion": "1.5.7",
 	"description": "A 3D force-directed graph with AI-driven topic clustering and gap-insight analysis.",
 	"author": "Samuel Bangslund",
 	"isDesktopOnly": true,
-	"version": "2.2.0"
+	"version": "2.2.1"
 }

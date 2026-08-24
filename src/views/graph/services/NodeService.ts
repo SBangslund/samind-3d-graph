@@ -45,6 +45,10 @@ export class NodeService extends AbstractGraphService {
     // working the moment any note was open (i.e. almost always) until an
     // explicit background click.
     private isPinnedByUser = false;
+    // Set while the MCP server has an active highlight. Blocks mouse hover
+    // and ambient active-leaf-change from overwriting the MCP state.
+    // Cleared only by mcpClearHighlights() or a deliberate background right-click.
+    private isMcpActive = false;
 
     // idle-state labels, kept in sync so the visibility loop can update them
     // in place instead of recreating DOM nodes every frame
@@ -400,7 +404,7 @@ export class NodeService extends AbstractGraphService {
         // change tracking, which would otherwise silently disable
         // cluster-hover the moment any note is open
         const now = performance.now();
-        if (!this.isPinnedByUser
+        if (!this.isPinnedByUser && !this.isMcpActive
             && this.clusterBoundaryService.getPinnedClusterIds().length === 0
             && now - this.lastClusterHoverCheck >= CLUSTER_HOVER_CHECK_INTERVAL_MS) {
             this.lastClusterHoverCheck = now;
@@ -474,10 +478,20 @@ export class NodeService extends AbstractGraphService {
             // keep using the proximity-declutter system below - a whole
             // cluster can be dozens of notes
             if (this.highlightService.getNodeSize() > 0 && this.isNodeFocusActive()) {
-                nodeEl.setCssStyles({
-                    opacity: this.highlightService.hasNode(node) ? '1' : '0.05',
-                    fontSize: this.highlightService.hasNode(node) ? '.75rem' : '0.45rem',
-                });
+                // MCP primary nodes get a distinct white label, larger than neighbors
+                if (this.highlightService.isPrimaryNode(node)) {
+                    nodeEl.setCssStyles({
+                        color: '#ffffff',
+                        opacity: '1',
+                        fontSize: '1rem',
+                        fontWeight: '700',
+                    });
+                } else {
+                    nodeEl.setCssStyles({
+                        opacity: this.highlightService.hasNode(node) ? '0.6' : '0.05',
+                        fontSize: this.highlightService.hasNode(node) ? '0.6rem' : '0.45rem',
+                    });
+                }
             } else {
                 // idle state (nothing hovered): hidden by default, the
                 // per-frame visibility loop reveals it only when the mouse
@@ -532,11 +546,13 @@ export class NodeService extends AbstractGraphService {
     // Uses the same pinned-cluster mechanism so it persists until cleared.
     public mcpHighlightNodes(paths: string[]): void {
         this.highlightService.clear();
+        this.isMcpActive = true;
         this.isPinnedByUser = true;
         this.inspecting = true;
         paths.forEach((path) => {
             const node = this.graph.getNodeById(path);
             if (!node) return;
+            this.highlightService.addPrimaryNode(node.id);
             this.highlightService.addNode(node.id);
             node.neighbors.forEach((n) => this.highlightService.addNode(n.id));
             this.checkRelations(node.id, false);
@@ -548,10 +564,15 @@ export class NodeService extends AbstractGraphService {
 
     // Clears any MCP-driven highlight state.
     public mcpClearHighlights(): void {
+        this.isMcpActive = false;
         this.onRemove();
     }
 
-    public pinClusters(clusterIds: string[]): void {
+    public pinClusters(clusterIds: string[], mcpDriven = false): void {
+        if (mcpDriven) {
+            this.isMcpActive = true;
+            this.isPinnedByUser = true;
+        }
         this.highlightService.clear();
         clusterIds.forEach((clusterId) => {
             this.graph.nodes.forEach((n) => {
@@ -582,6 +603,8 @@ export class NodeService extends AbstractGraphService {
     }
 
     private onRemove(): void {
+        // A background right-click explicitly clears everything including MCP
+        this.isMcpActive = false;
         this.inspecting = false;
         this.isPinnedByUser = false;
         this.clusterBoundaryService.setPinnedClusters([]);
@@ -602,7 +625,7 @@ export class NodeService extends AbstractGraphService {
         // do with node-hover. Gated on isPinnedByUser (not inspecting): a
         // deliberate right-click pin should block casual hover, but the
         // ambient active-leaf-change tracking should not.
-        if (this.isPinnedByUser ||
+        if (this.isPinnedByUser || this.isMcpActive ||
             (!node && this.hoveredNode === null) ||
             (node && this.hoveredNode === node)) {
             return;
@@ -643,6 +666,8 @@ export class NodeService extends AbstractGraphService {
     };
 
     private inspectNode(node: Node | null, isPinnedByUser = false): void {
+        // MCP is in control — ambient leaf changes and non-pinned clicks must not override it
+        if (this.isMcpActive && !isPinnedByUser) return;
         this.inspecting = true;
         this.isPinnedByUser = isPinnedByUser;
         (document.getElementsByClassName('scene-tooltip')[0] as HTMLElement)?.setCssStyles({ display: 'none' });
@@ -689,9 +714,10 @@ export class NodeService extends AbstractGraphService {
 
     private getNodeVal(node: Node): number {
         const importance = this.plugin.analysisService.getImportance(node.id);
-        // importance 0-1 maps onto 0.3x-4x the base node size, so hub notes
-        // stand out clearly against the long tail
-        return importance !== null ? node.val * (0.3 + importance * 3.7) : node.val;
+        const base = importance !== null ? node.val * (0.3 + importance * 3.7) : node.val;
+        // MCP primary nodes get a size boost so they're immediately recognisable
+        if (this.highlightService.isPrimaryNode(node)) return base * 2.2;
+        return base;
     }
 
     private isNodeVisible(node: Node): boolean {
@@ -745,6 +771,11 @@ export class NodeService extends AbstractGraphService {
         }
         if (this.highlightService.getParentSize() > 0 && this.highlightService.isParent(node)) {
             return color;
+        }
+        // MCP primary nodes render as bright white so they're unmistakably
+        // distinct from their connected neighbors (which keep their cluster color)
+        if (this.highlightService.isPrimaryNode(node)) {
+            return '#ffffff';
         }
         // covers both node-hover/inspect (highlight set = hovered node's
         // neighbors) and cluster-hover (highlight set = cluster members,

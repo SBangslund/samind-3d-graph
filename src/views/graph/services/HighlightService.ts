@@ -14,6 +14,9 @@ export class HighlightService extends AbstractGraphService {
     private readonly links: Set<Link> = new Set();
     private readonly nodes: Set<string> = new Set();
     private readonly parents: Set<string> = new Set();
+    // MCP-requested primary nodes — rendered with a distinct accent so they
+    // stand out from the connected neighbors that are also in `nodes`
+    private readonly primaryNodes: Set<string> = new Set();
 
     public update(): void {
         this.instance
@@ -25,6 +28,19 @@ export class HighlightService extends AbstractGraphService {
         this.links.clear();
         this.nodes.clear();
         this.parents.clear();
+        this.primaryNodes.clear();
+    }
+
+    public addPrimaryNode(id: string): void {
+        this.primaryNodes.add(id);
+    }
+
+    public isPrimaryNode(node: Node): boolean {
+        return this.primaryNodes.has(node.id);
+    }
+
+    public getPrimarySize(): number {
+        return this.primaryNodes.size;
     }
 
     public addLink(link: Link): void {

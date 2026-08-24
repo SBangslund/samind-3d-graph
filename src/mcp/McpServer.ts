@@ -10,8 +10,10 @@
 // Configure in opencode.json:
 //   "mcp": { "samind-graph": { "type": "remote", "url": "http://localhost:27184/mcp" } }
 
+import type { EventRef } from 'obsidian';
 import type Graph3dPlugin from 'src/main';
 import type { IncomingMessage, ServerResponse, Server } from 'http';
+import EventBus from 'src/util/EventBus';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
 
@@ -103,6 +105,34 @@ const TOOLS: McpTool[] = [
 		},
 	},
 	{
+		name: 'highlight_and_show',
+		description:
+			'Highlights nodes AND shows snippet cards in a single call — use this instead of ' +
+			'calling highlight_nodes and show_snippets separately. Saves a round-trip.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				nodes: {
+					type: 'array',
+					description: 'Nodes to highlight and annotate',
+					items: {
+						type: 'object',
+						properties: {
+							path:    { type: 'string', description: 'Vault-relative file path' },
+							snippet: { type: 'string', description: 'Text to show in card (auto-fetched if omitted)' },
+						},
+						required: ['path'],
+					},
+				},
+				names: {
+					type: 'array',
+					items: { type: 'string' },
+					description: 'Fuzzy name matches — resolved to paths automatically',
+				},
+			},
+		},
+	},
+	{
 		name: 'show_snippets',
 		description:
 			'Displays 2D overlay cards on the graph, each anchored to a node with a connector line. ' +
@@ -137,6 +167,9 @@ const TOOLS: McpTool[] = [
 export class McpServer {
 	private server: Server | null = null;
 	private port: number;
+	// Cached graph structure — rebuilt on graph-changed, served instantly after
+	private structureCache: string | null = null;
+	private graphChangedRef: EventRef | null = null;
 
 	constructor(private readonly plugin: Graph3dPlugin, port = 27184) {
 		this.port = port;
@@ -169,11 +202,14 @@ export class McpServer {
 				console.error('Samind MCP server error:', err);
 			}
 		});
+
+		this.graphChangedRef = EventBus.on('graph-changed', () => { this.structureCache = null; });
 	}
 
 	stop(): void {
 		this.server?.close();
 		this.server = null;
+		if (this.graphChangedRef) EventBus.offref(this.graphChangedRef);
 	}
 
 	private addCors(res: ServerResponse): void {
@@ -295,6 +331,8 @@ export class McpServer {
 				result = this.toolHighlightCluster(args); break;
 			case 'get_note_snippet':
 				result = await this.toolGetNoteSnippet(args); break;
+			case 'highlight_and_show':
+				result = await this.toolHighlightAndShow(args); break;
 			case 'show_snippets':
 				result = await this.toolShowSnippets(args); break;
 			case 'clear_highlights':
@@ -305,7 +343,7 @@ export class McpServer {
 
 		// MCP spec: tools/call result must be { content: [{ type, text }] }
 		return {
-			content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+			content: [{ type: 'text', text: JSON.stringify(result) }],
 			isError: false,
 		};
 	}
@@ -313,6 +351,10 @@ export class McpServer {
 	// ── Tool implementations ───────────────────────────────────────────────
 
 	private toolGetGraphStructure(): unknown {
+		// Serve from cache when available — rebuilding 150+ nodes on every call
+		// adds latency and token cost for no benefit; invalidated on graph-changed
+		if (this.structureCache) return JSON.parse(this.structureCache);
+
 		const graph = this.plugin.globalGraph;
 		const analysis = this.plugin.analysisService;
 
@@ -322,29 +364,43 @@ export class McpServer {
 
 		const clusterNodeCounts = analysis.getClusterNoteCounts();
 
-		const nodes = graph.nodes.map((node) => ({
-			path:         node.path,
-			name:         node.name,
-			clusterId:    analysis.getClusterId(node.path) ?? null,
-			clusterLabel: analysis.getClusterLabel(node.path) ?? null,
-			importance:   analysis.getImportance(node.path) ?? null,
-			linkCount:    node.links.length,
-		}));
+		// Only include nodes that have analysis data or links — pure isolated
+		// orphans with no cluster/importance add tokens without useful signal
+		const nodes = graph.nodes
+			.filter((n) => n.links.length > 0 || analysis.getClusterId(n.path) !== null)
+			.map((node) => {
+				const clusterId  = analysis.getClusterId(node.path);
+				const importance = analysis.getImportance(node.path);
+				// Keep keys short to minimize token cost; omit nulls
+				const entry: Record<string, unknown> = {
+					p: node.path,
+					n: node.name.replace(/\.md$/, ''),
+					l: node.links.length,
+				};
+				if (clusterId)  entry.c = clusterId;
+				if (importance !== null) entry.i = Math.round(importance * 100) / 100;
+				return entry;
+			});
 
 		const clusters = analysis.getClusters().map((c) => ({
-			id:         c.id,
-			label:      c.label,
-			color:      c.color,
-			importance: analysis.getClusterImportance(c.id),
-			nodeCount:  clusterNodeCounts[c.id] ?? 0,
+			id:    c.id,
+			label: c.label,
+			color: c.color,
+			imp:   Math.round(analysis.getClusterImportance(c.id) * 100) / 100,
+			count: clusterNodeCounts[c.id] ?? 0,
 		}));
 
-		return {
+		const result = {
 			nodes,
 			clusters,
+			// legend so the LLM knows the short key names
+			_keys: 'nodes: p=path, n=name, l=linkCount, c=clusterId, i=importance(0-1)',
 			totalNodes: graph.nodes.length,
 			totalLinks: graph.links.length,
 		};
+
+		this.structureCache = JSON.stringify(result);
+		return result;
 	}
 
 	private toolHighlightNodes(args: Record<string, unknown>): unknown {
@@ -422,6 +478,52 @@ export class McpServer {
 		} catch (err) {
 			return { error: `Could not read file: ${String(err)}` };
 		}
+	}
+
+	private async toolHighlightAndShow(args: Record<string, unknown>): Promise<unknown> {
+		const graph = this.plugin.globalGraph;
+		if (!graph) return { error: 'Graph not initialised' };
+
+		const inputNodes = (args.nodes as Array<{ path: string; snippet?: string }> | undefined) ?? [];
+		const names = (args.names as string[] | undefined) ?? [];
+
+		// Resolve fuzzy names → paths
+		const resolvedPaths = new Set(inputNodes.map((n) => n.path).filter(Boolean));
+		if (names.length > 0) {
+			graph.nodes.forEach((node) => {
+				const nameLower = node.name.toLowerCase().replace(/\.md$/, '');
+				if (names.some((n) => nameLower.includes(n.toLowerCase()))) {
+					resolvedPaths.add(node.path);
+				}
+			});
+		}
+
+		if (resolvedPaths.size === 0) return { error: 'No matching nodes found' };
+
+		// Build snippet entries (fetch content in parallel)
+		const snippetMap = new Map(inputNodes.map((n) => [n.path, n.snippet]));
+		const entries = await Promise.all([...resolvedPaths].map(async (path) => {
+			const file = this.plugin.app.vault.getFileByPath(path);
+			let snippetText = snippetMap.get(path) ?? '';
+			if (!snippetText && file) {
+				try {
+					const content = await this.plugin.app.vault.cachedRead(file);
+					snippetText = content.slice(0, 300).trimEnd();
+					if (content.length > 300) snippetText += '…';
+				} catch { snippetText = ''; }
+			}
+			const nodeInGraph = graph.getNodeById(path);
+			const title = nodeInGraph?.name.replace(/\.md$/, '') ?? (file?.basename ?? path);
+			return { path, title, snippet: snippetText, color: this.plugin.analysisService.getClusterColor(path) ?? undefined };
+		}));
+
+		const graphView = this.plugin.getActiveGraphView();
+		if (!graphView) return { warning: 'Graph view not open', matched: [...resolvedPaths] };
+
+		const forceGraph = graphView.getForceGraph();
+		forceGraph.mcpHighlightNodes([...resolvedPaths]);
+		forceGraph.mcpShowSnippets(entries);
+		return { highlighted: [...resolvedPaths] };
 	}
 
 	private async toolShowSnippets(args: Record<string, unknown>): Promise<unknown> {

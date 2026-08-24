@@ -221,12 +221,16 @@ its idle state.
 ## Recommended flow
 
 ```
-1. get_graph_structure          ← understand the vault topology
-2. highlight_nodes / highlight_cluster  ← draw the user's attention
-3. show_snippets                ← surface the relevant content
-4. ... conversation continues ...
-5. clear_highlights             ← clean up when done
+1. get_graph_structure            ← understand the vault topology (cached after first call)
+2. highlight_and_show             ← highlight nodes + show snippets in ONE call
+   — or —
+   highlight_cluster              ← when discussing a topic area, not specific notes
+3. ... conversation continues ...
+4. clear_highlights               ← clean up when done
 ```
+
+Prefer `highlight_and_show` over calling `highlight_nodes` + `show_snippets` separately —
+it saves a round-trip and the LLM gets the same result in one step.
 
 ## Setup (one-time, for the user)
 

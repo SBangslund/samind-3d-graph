@@ -103,6 +103,31 @@ const TOOLS: McpTool[] = [
 		},
 	},
 	{
+		name: 'show_snippets',
+		description:
+			'Displays 2D overlay cards on the graph, each anchored to a node with a connector line. ' +
+			'Use after highlight_nodes to surface relevant excerpts from the notes being discussed. ' +
+			'Automatically fetches note content if snippets are not provided.',
+		inputSchema: {
+			type: 'object',
+			properties: {
+				nodes: {
+					type: 'array',
+					description: 'One entry per note to annotate',
+					items: {
+						type: 'object',
+						properties: {
+							path:    { type: 'string', description: 'Vault-relative file path' },
+							snippet: { type: 'string', description: 'Text to show in the card (auto-fetched if omitted)' },
+						},
+						required: ['path'],
+					},
+				},
+			},
+			required: ['nodes'],
+		},
+	},
+	{
 		name: 'clear_highlights',
 		description: 'Clears any MCP-driven highlights from the graph, returning it to its idle state.',
 		inputSchema: { type: 'object', properties: {}, required: [] },
@@ -270,6 +295,8 @@ export class McpServer {
 				result = this.toolHighlightCluster(args); break;
 			case 'get_note_snippet':
 				result = await this.toolGetNoteSnippet(args); break;
+			case 'show_snippets':
+				result = await this.toolShowSnippets(args); break;
 			case 'clear_highlights':
 				result = this.toolClearHighlights(); break;
 			default:
@@ -395,6 +422,45 @@ export class McpServer {
 		} catch (err) {
 			return { error: `Could not read file: ${String(err)}` };
 		}
+	}
+
+	private async toolShowSnippets(args: Record<string, unknown>): Promise<unknown> {
+		const nodes = (args.nodes as Array<{ path: string; snippet?: string }> | undefined) ?? [];
+		if (nodes.length === 0) return { error: 'nodes array is required' };
+
+		const graph = this.plugin.globalGraph;
+		const analysis = this.plugin.analysisService;
+		const graphView = this.plugin.getActiveGraphView();
+
+		const entries: Array<{ path: string; title: string; snippet: string; color?: string }> = [];
+
+		for (const item of nodes) {
+			const file = this.plugin.app.vault.getFileByPath(item.path);
+			if (!file) continue;
+
+			// Auto-fetch snippet if not provided
+			let snippetText = item.snippet ?? '';
+			if (!snippetText) {
+				try {
+					const content = await this.plugin.app.vault.cachedRead(file);
+					snippetText = content.slice(0, 300).trimEnd();
+					if (content.length > 300) snippetText += '…';
+				} catch { snippetText = ''; }
+			}
+
+			const nodeInGraph = graph?.getNodeById(item.path);
+			const title = nodeInGraph?.name.replace(/\.md$/, '') ?? file.basename;
+			const color = analysis.getClusterColor(item.path) ?? undefined;
+
+			entries.push({ path: item.path, title, snippet: snippetText, color });
+		}
+
+		if (!graphView) {
+			return { warning: 'Graph view not open — cannot show snippets', entries: entries.length };
+		}
+
+		graphView.getForceGraph().mcpShowSnippets(entries);
+		return { shown: entries.map((e) => e.path) };
 	}
 
 	private toolClearHighlights(): unknown {

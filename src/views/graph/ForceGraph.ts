@@ -11,6 +11,7 @@ import { LinkService } from "./services/LinkService"
 import { NodeService } from "./services/NodeService"
 import { SettingsService } from "./services/SettingsService"
 import { ClusterBoundaryService } from "./services/ClusterBoundaryService"
+import { SnippetOverlayService, SnippetEntry } from "./services/SnippetOverlayService"
 
 // Adapted from https://github.com/vasturiano/3d-force-graph/blob/master/example/highlight/index.html
 // D3.js 3D Force Graph
@@ -28,6 +29,7 @@ export class ForceGraph {
 	private nodeService: NodeService;
 	private settingsService: SettingsService;
 	private clusterBoundaryService: ClusterBoundaryService;
+	private snippetOverlay: SnippetOverlayService;
 
 	constructor(
 		plugin: Graph3dPlugin,
@@ -84,6 +86,11 @@ export class ForceGraph {
 		this.clusterBoundaryService = new ClusterBoundaryService(this.instance, this.plugin, this.graph);
 		this.nodeService = new NodeService(this.instance, this.plugin, this.highlightService, this.graph, this.clusterBoundaryService);
 		this.settingsService = new SettingsService(this.instance, this.plugin);
+		this.snippetOverlay = new SnippetOverlayService(
+			this.instance,
+			this.rootHtmlElement,
+			() => this.graph,
+		);
 	}
 
 	private initInstance() {
@@ -169,13 +176,19 @@ export class ForceGraph {
 		this.nodeService?.pinClusters([clusterId], true);
 	}
 
+	public mcpShowSnippets(entries: SnippetEntry[]): void {
+		this.snippetOverlay?.show(entries);
+	}
+
 	public mcpClearHighlights(): void {
 		this.nodeService?.mcpClearHighlights();
 		this.clusterBoundaryService?.setPinnedClusters([]);
+		this.snippetOverlay?.clear();
 	}
 
 	public destroy(): void {
 		this.nodeService?.destroy();
 		this.clusterBoundaryService?.destroy();
+		this.snippetOverlay?.destroy();
 	}
 }

@@ -103,3 +103,142 @@ Tell the user the file has been (re)generated and that they can either:
 - reopen the 3D Graph view
 
 to see the updated clusters/sizing.
+
+---
+
+# Samind Graph MCP — Live Graph Interaction
+
+The Samind 3D Graph plugin also exposes a **local MCP server** on
+`http://localhost:27184/mcp` while the plugin is loaded. This gives you live,
+two-way control of the graph while talking to the user — highlight relevant
+nodes, surface note snippets, and query the vault topology **without the user
+having to navigate manually**.
+
+## When to use
+
+Use the graph MCP tools proactively whenever:
+- You are discussing specific notes or topics — highlight the relevant nodes
+  so the user can see where they sit in the knowledge graph.
+- You are explaining a cluster or theme — call `highlight_cluster` to dim
+  everything else.
+- You want to surface a quote or excerpt — call `show_snippets` to attach
+  floating cards to the nodes in question.
+- The user asks about the structure of their vault — call
+  `get_graph_structure` first to ground your answer in real topology data.
+
+Always call `clear_highlights` when moving to a new topic or at the end of
+a conversation about the graph, so the user's graph returns to its idle state.
+
+## Tools
+
+### `get_graph_structure`
+Returns all nodes with cluster memberships, importance scores, and link counts,
+plus all cluster metadata. Call this before reasoning about the vault structure
+so your answers are grounded in the actual graph, not guesses.
+
+**No input required.**
+
+Returns:
+```json
+{
+  "nodes": [{ "path": "...", "name": "...", "clusterId": "c1", "clusterLabel": "Machine Learning", "importance": 0.82, "linkCount": 14 }],
+  "clusters": [{ "id": "c1", "label": "Machine Learning", "color": "#4f8fd1", "importance": 0.9, "nodeCount": 23 }],
+  "totalNodes": 154,
+  "totalLinks": 412
+}
+```
+
+---
+
+### `highlight_nodes`
+Highlights one or more nodes in the graph. Primary nodes render **white and
+enlarged**; their direct neighbors show at normal color; everything else dims.
+The highlight persists until `clear_highlights` is called or the user
+right-clicks the background.
+
+```json
+{ "paths": ["Projects/Alpha.md", "Ideas/Beta.md"] }
+```
+Or by partial name (case-insensitive fuzzy match):
+```json
+{ "names": ["Alpha", "reinforcement learning"] }
+```
+
+---
+
+### `highlight_cluster`
+Highlights all nodes in a cluster, dimming the rest. Use when discussing a
+topic area rather than specific notes.
+
+```json
+{ "label": "Machine Learning" }
+```
+Or by exact id:
+```json
+{ "id": "c1" }
+```
+
+---
+
+### `show_snippets`
+Attaches floating 2D cards to highlighted nodes — each card shows a note
+title and an excerpt, connected to its node by a dashed line. Positions
+update live as the user rotates/zooms the graph.
+
+Call this after `highlight_nodes` to give the user immediate context.
+If `snippet` is omitted, the first ~300 characters are fetched automatically.
+
+```json
+{
+  "nodes": [
+    { "path": "Projects/Alpha.md" },
+    { "path": "Ideas/Beta.md", "snippet": "A specific excerpt you want to surface" }
+  ]
+}
+```
+
+---
+
+### `get_note_snippet`
+Returns the first portion of a single note's content (up to 2000 characters).
+Use when you need to read a note before deciding what to surface, without
+committing it to the graph UI.
+
+```json
+{ "path": "Projects/Alpha.md", "maxLength": 600 }
+```
+
+---
+
+### `clear_highlights`
+Clears all MCP-driven highlights and snippet cards, returning the graph to
+its idle state.
+
+**No input required.**
+
+---
+
+## Recommended flow
+
+```
+1. get_graph_structure          ← understand the vault topology
+2. highlight_nodes / highlight_cluster  ← draw the user's attention
+3. show_snippets                ← surface the relevant content
+4. ... conversation continues ...
+5. clear_highlights             ← clean up when done
+```
+
+## Setup (one-time, for the user)
+
+Add to `opencode.json`:
+```json
+"mcp": {
+  "samind-graph": {
+    "type": "remote",
+    "url": "http://localhost:27184/mcp"
+  }
+}
+```
+
+The server starts automatically when the plugin loads and stops when it
+unloads. It only accepts connections from `127.0.0.1`.

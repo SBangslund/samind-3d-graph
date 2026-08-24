@@ -234,3 +234,57 @@
 	gap: 8px;
 	margin-top: 1rem;
 }
+
+/* ── Snippet overlay ────────────────────────────────────────────────────── */
+
+.samind-snippet-overlay {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 10;
+}
+
+.samind-snippet-svg {
+	position: absolute;
+	inset: 0;
+	overflow: visible;
+}
+
+.samind-snippet-cards {
+	position: absolute;
+	inset: 0;
+}
+
+.samind-snippet-card {
+	position: absolute;
+	width: 240px;
+	background: var(--background-secondary);
+	border: 1px solid var(--snippet-accent, var(--color-accent));
+	border-radius: 8px;
+	padding: 10px 12px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+	pointer-events: auto;
+	transition: opacity 0.2s ease;
+	opacity: 0;
+}
+
+.samind-snippet-card-title {
+	font-size: 0.78rem;
+	font-weight: 700;
+	color: var(--snippet-accent, var(--text-accent));
+	margin-bottom: 6px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.samind-snippet-card-body {
+	font-size: 0.72rem;
+	color: var(--text-muted);
+	line-height: 1.45;
+	max-height: 90px;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 5;
+	-webkit-box-orient: vertical;
+}

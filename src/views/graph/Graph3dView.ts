@@ -32,6 +32,10 @@ export class Graph3dView extends ItemView {
 		return this.forceGraph;
 	}
 
+	public showSnippets(entries: import('../graph/services/SnippetOverlayService').SnippetEntry[]): void {
+		this.forceGraph?.mcpShowSnippets(entries);
+	}
+
 	showGraph() {
 		const viewContent = this.containerEl.querySelector(
 			".view-content"

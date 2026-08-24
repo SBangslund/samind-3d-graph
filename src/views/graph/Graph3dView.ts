@@ -28,6 +28,10 @@ export class Graph3dView extends ItemView {
 		this.unsubscribeAnalysisBanner?.();
 	}
 
+	public getForceGraph(): ForceGraph {
+		return this.forceGraph;
+	}
+
 	showGraph() {
 		const viewContent = this.containerEl.querySelector(
 			".view-content"

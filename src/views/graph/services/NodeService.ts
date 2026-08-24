@@ -528,6 +528,29 @@ export class NodeService extends AbstractGraphService {
     // node-hover/cluster-hover use, so nodes, edges, boxes, and titles all
     // dim/brighten together. Stays until a real node hover/inspect or a
     // background click clears it.
+    // Highlights specific nodes by path, triggered by the MCP server.
+    // Uses the same pinned-cluster mechanism so it persists until cleared.
+    public mcpHighlightNodes(paths: string[]): void {
+        this.highlightService.clear();
+        this.isPinnedByUser = true;
+        this.inspecting = true;
+        paths.forEach((path) => {
+            const node = this.graph.getNodeById(path);
+            if (!node) return;
+            this.highlightService.addNode(node.id);
+            node.neighbors.forEach((n) => this.highlightService.addNode(n.id));
+            this.checkRelations(node.id, false);
+        });
+        this.highlightService.update();
+        this.clusterBoundaryService.setPinnedClusters([]);
+        this.update();
+    }
+
+    // Clears any MCP-driven highlight state.
+    public mcpClearHighlights(): void {
+        this.onRemove();
+    }
+
     public pinClusters(clusterIds: string[]): void {
         this.highlightService.clear();
         clusterIds.forEach((clusterId) => {

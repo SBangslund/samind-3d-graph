@@ -8,6 +8,7 @@ import EventBus from "./util/EventBus";
 import { ResolvedLinkCache } from "./graph/Link";
 import shallowCompare from "./util/ShallowCompare";
 import { AnalysisService } from "./analysis/AnalysisService";
+import { McpServer } from "./mcp/McpServer";
 
 export default class Graph3dPlugin extends Plugin {
 	_resolvedCache: ResolvedLinkCache;
@@ -23,6 +24,7 @@ export default class Graph3dPlugin extends Plugin {
 	public globalGraph: Graph;
 	public theme: ObsidianTheme;
 	public analysisService: AnalysisService;
+	private mcpServer: McpServer;
 	// Graphs that are waiting for cache to be ready
 	private queuedGraphs: Graph3dView[] = [];
 	private callbackUnregisterHandles: (() => void)[] = [];
@@ -65,6 +67,8 @@ export default class Graph3dPlugin extends Plugin {
 	private async init() {
 		await this.initStates();
 		this.initListeners();
+		this.mcpServer = new McpServer(this);
+		this.mcpServer.start();
 	}
 
 	private async initStates() {
@@ -204,6 +208,7 @@ export default class Graph3dPlugin extends Plugin {
 
 	onunload() {
 		super.onunload();
+		this.mcpServer?.stop();
 		this.openLeaves.forEach((leaf) => leaf.detach());
 		this.openLeaves = [];
 		this.callbackUnregisterHandles.forEach((handle) => handle());
@@ -212,5 +217,15 @@ export default class Graph3dPlugin extends Plugin {
 
 	public getSettings(): GraphSettings {
 		return this.settingsState.value;
+	}
+
+	// Returns the first open Graph3dView (for MCP highlight commands).
+	// Returns null when no graph is currently open.
+	public getActiveGraphView(): Graph3dView | null {
+		for (const leaf of this.openLeaves) {
+			const view = leaf.view;
+			if (view instanceof Graph3dView) return view;
+		}
+		return null;
 	}
 }

@@ -158,6 +158,22 @@ export class ForceGraph {
 		this.nodeService?.pinClusters(clusterIds);
 	}
 
+	// ── MCP highlight API ────────────────────────────────────────────────────
+
+	public mcpHighlightNodes(paths: string[]): void {
+		this.nodeService?.mcpHighlightNodes(paths);
+	}
+
+	public mcpHighlightCluster(clusterId: string): void {
+		this.clusterBoundaryService?.focusOnClusters([clusterId]);
+		this.nodeService?.pinClusters([clusterId]);
+	}
+
+	public mcpClearHighlights(): void {
+		this.nodeService?.mcpClearHighlights();
+		this.clusterBoundaryService?.setPinnedClusters([]);
+	}
+
 	public destroy(): void {
 		this.nodeService?.destroy();
 		this.clusterBoundaryService?.destroy();

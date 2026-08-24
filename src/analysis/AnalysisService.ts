@@ -21,7 +21,9 @@ export class AnalysisService {
 				return;
 			}
 			const raw = await this.app.vault.adapter.read(ANALYSIS_FILE_PATH);
-			const parsed: unknown = JSON.parse(raw);
+			// Strip UTF-8 BOM if present (some editors write one, V8's JSON.parse rejects it)
+			const stripped = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+			const parsed: unknown = JSON.parse(stripped);
 			if (!isAnalysisData(parsed)) {
 				console.warn(
 					"Samind 3D Graph: analysis.json is malformed, ignoring."

@@ -50,12 +50,8 @@ export class ForceGraph {
 		this.nodeService.init();
 		this.linkService.init();
 		this.clusterBoundaryService.init();
-
-		// TODO: Add check for change sin search bar. This should then be reflected onto the graph.
-		/*setInterval(() => {
-			let test = document.getElementsByClassName('search-info-container')[0];
-			console.log(((test as HTMLElement).children[0] as HTMLElement)?.outerText);
-		}, 1000)*/
+		// background click/right-click clears snippet cards too
+		this.nodeService.onClear = () => this.snippetOverlay?.clear();
 	}
 
 	private initListeners() {
@@ -90,6 +86,8 @@ export class ForceGraph {
 			this.instance,
 			this.rootHtmlElement,
 			() => this.graph,
+			this.plugin.app,
+			this.plugin,
 		);
 	}
 

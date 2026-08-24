@@ -36,6 +36,12 @@ export default class Graph3dPlugin extends Plugin {
 
 	async onload() {
 		await this.init();
+		// Register snippet overlay as a hover-link source so Obsidian's
+		// Page Preview plugin shows popups when hovering [[wikilinks]] in cards
+		this.app.workspace.registerHoverLinkSource('samind-graph-snippets', {
+			display: 'Samind 3D Graph snippets',
+			defaultMod: true,
+		});
 		this.addRibbonIcon("share-2", "3D Graph", this.openGlobalGraph);
 		this.addCommand({
 			id: "open-3d-graph-global",

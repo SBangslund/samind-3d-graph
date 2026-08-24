@@ -4,8 +4,12 @@
 // connecting card to node. Cards are clamped inside the viewport so they never
 // clip out of view. Positions update every rAF tick so they track the node as
 // the user rotates/zooms the graph.
+//
+// Cards use Obsidian's MarkdownRenderer so [[wikilinks]] render as clickable
+// links with hover-preview support.
 
 import { ForceGraph3DInstance } from '3d-force-graph';
+import { App, Component, MarkdownRenderer } from 'obsidian';
 import Graph from 'src/graph/Graph';
 
 export interface SnippetEntry {
@@ -15,22 +19,30 @@ export interface SnippetEntry {
 	color?: string; // cluster color for the accent line/border
 }
 
-const CARD_WIDTH = 240;
+const CARD_WIDTH = 280;
 const CARD_MARGIN = 16;   // min distance from viewport edge
-const LINE_OFFSET = 12;   // gap between node sphere and line end
+const LINE_OFFSET = 14;   // gap between node sphere and line end
 
 export class SnippetOverlayService {
 	private container: HTMLElement;
+	private backdrop: HTMLElement;
 	private svgEl: SVGSVGElement;
 	private cardsEl: HTMLElement;
 	private animFrameId: number | null = null;
 	private entries: SnippetEntry[] = [];
+	// MarkdownRenderer child components — must be unloaded when cards are cleared
+	private renderComponents: Component[] = [];
 
 	constructor(
 		private readonly instance: ForceGraph3DInstance,
 		private readonly rootEl: HTMLElement,
 		private readonly getGraph: () => Graph,
+		private readonly app: App,
+		private readonly parentComponent: Component,
 	) {
+		// Backdrop — dims the graph when snippets are visible
+		this.backdrop = rootEl.createDiv({ cls: 'samind-snippet-backdrop' });
+
 		this.container = rootEl.createDiv({ cls: 'samind-snippet-overlay' });
 
 		// SVG layer for connector lines (behind cards)
@@ -45,6 +57,7 @@ export class SnippetOverlayService {
 	public show(entries: SnippetEntry[]): void {
 		this.entries = entries;
 		this.rebuild();
+		this.backdrop.classList.add('is-active');
 		if (this.animFrameId === null) {
 			this.animFrameId = window.requestAnimationFrame(this.tick);
 		}
@@ -53,6 +66,7 @@ export class SnippetOverlayService {
 	public clear(): void {
 		this.entries = [];
 		this.rebuild();
+		this.backdrop.classList.remove('is-active');
 		if (this.animFrameId !== null) {
 			window.cancelAnimationFrame(this.animFrameId);
 			this.animFrameId = null;
@@ -61,12 +75,16 @@ export class SnippetOverlayService {
 
 	public destroy(): void {
 		this.clear();
+		this.backdrop.remove();
 		this.container.remove();
 	}
 
 	// ── private ──────────────────────────────────────────────────────────────
 
 	private rebuild(): void {
+		// Unload any previous render children to avoid leaks
+		this.renderComponents.forEach((c) => c.unload());
+		this.renderComponents = [];
 		this.svgEl.innerHTML = '';
 		this.cardsEl.innerHTML = '';
 
@@ -77,8 +95,8 @@ export class SnippetOverlayService {
 			const line = document.createElementNS('http://www.w3.org/2000/svg', 'line') as SVGLineElement;
 			line.setAttribute('stroke', accent);
 			line.setAttribute('stroke-width', '1.5');
-			line.setAttribute('stroke-opacity', '0.7');
-			line.setAttribute('stroke-dasharray', '4 3');
+			line.setAttribute('stroke-opacity', '0.75');
+			line.setAttribute('stroke-dasharray', '5 3');
 			line.dataset.index = String(i);
 			this.svgEl.appendChild(line);
 
@@ -91,7 +109,37 @@ export class SnippetOverlayService {
 			titleEl.textContent = entry.title;
 
 			const bodyEl = card.createDiv({ cls: 'samind-snippet-card-body' });
-			bodyEl.textContent = entry.snippet;
+
+			// Render with MarkdownRenderer so [[wikilinks]] become clickable
+			// links with Obsidian hover-preview support
+			const child = new Component();
+			this.parentComponent.addChild(child);
+			this.renderComponents.push(child);
+			child.load();
+
+			MarkdownRenderer.render(
+				this.app,
+				entry.snippet,
+				bodyEl,
+				entry.path,
+				child,
+			).then(() => {
+				// Wire up hover-preview on all internal links in the card
+				bodyEl.querySelectorAll('a.internal-link').forEach((a) => {
+					a.addEventListener('mouseover', (e) => {
+						this.app.workspace.trigger('hover-link', {
+							event: e,
+							source: 'samind-graph-snippets',
+							hoverParent: { hoverPopover: null },
+							targetEl: a,
+							linktext: (a as HTMLAnchorElement).getAttribute('data-href') ?? (a as HTMLAnchorElement).textContent ?? '',
+							sourcePath: entry.path,
+						});
+					});
+				});
+			}).catch(() => {
+				bodyEl.textContent = entry.snippet;
+			});
 		});
 	}
 
@@ -115,7 +163,7 @@ export class SnippetOverlayService {
 			const line = this.svgEl.children[i] as SVGLineElement | undefined;
 			if (!card || !line) return;
 
-			if (!rNode?.x || !rNode?.y || !rNode?.z) {
+			if (rNode?.x == null || rNode?.y == null || rNode?.z == null) {
 				card.style.opacity = '0';
 				line.style.display = 'none';
 				return;
@@ -125,18 +173,19 @@ export class SnippetOverlayService {
 			const nx = screen.x;
 			const ny = screen.y;
 
-			// Distribute cards vertically so they don't all stack
-			const cardH = card.offsetHeight || 110;
-			const spacing = cardH + 12;
-			const totalH = this.entries.length * spacing - 12;
+			// Distribute cards vertically, centred in viewport
+			const cardH = card.offsetHeight || 130;
+			const spacing = cardH + 14;
+			const totalH = this.entries.length * spacing - 14;
 			const startY = H / 2 - totalH / 2;
 			const idealCardY = startY + i * spacing;
 
-			// Place card on left or right side based on node position
-			const onRight = nx < W / 2;
+			// Place card on whichever side has more space from the node
+			const spaceRight = W - nx;
+			const onRight = spaceRight >= nx;
 			const cardX = onRight
-				? Math.min(nx + 60, W - CARD_WIDTH - CARD_MARGIN)
-				: Math.max(nx - 60 - CARD_WIDTH, CARD_MARGIN);
+				? Math.min(nx + 70, W - CARD_WIDTH - CARD_MARGIN)
+				: Math.max(nx - 70 - CARD_WIDTH, CARD_MARGIN);
 			const cardY = Math.max(CARD_MARGIN, Math.min(idealCardY, H - cardH - CARD_MARGIN));
 
 			card.style.left = cardX + 'px';
@@ -148,7 +197,6 @@ export class SnippetOverlayService {
 			const cardAnchorX = onRight ? cardX : cardX + CARD_WIDTH;
 			const cardAnchorY = cardY + cardH / 2;
 
-			// nudge line start off the node sphere
 			const dx = cardAnchorX - nx;
 			const dy = cardAnchorY - ny;
 			const dist = Math.sqrt(dx * dx + dy * dy) || 1;

@@ -4,6 +4,32 @@ All notable changes to this plugin are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-08-24
+
+### Added
+
+- **MCP server** — the plugin starts a local MCP server on `http://localhost:27184/mcp` when loaded, exposing the graph to any MCP-compatible AI (e.g. OpenCode). Configure with `"mcp": { "samind-graph": { "type": "remote", "url": "http://localhost:27184/mcp" } }` in `opencode.json`
+- **MCP tools**: `get_graph_structure`, `highlight_nodes`, `highlight_cluster`, `highlight_and_show`, `show_snippets`, `get_note_snippet`, `clear_highlights`
+- **Snippet overlay cards** — the AI can attach floating 2D cards to nodes showing note excerpts, connected by a dashed line that tracks the node as you rotate/zoom. Cards expand to fit content and scroll at max-height
+- **Snippet backdrop** — a dimming overlay fades in behind cards to reduce graph clutter when snippets are visible
+- **Obsidian MarkdownRenderer in snippet cards** — `[[wikilinks]]` and markdown formatting render properly; Mod+hover triggers Obsidian's page-preview popup
+- **Ctrl/Cmd+click node** — shows a hover preview popup instead of opening the file, for quick browsing without leaving the graph
+- **Locked highlights** — MCP highlights and "Show in graph" gap-insight highlights now persist through mouse movement; only a background click/right-click dismisses them (including any open snippet cards)
+- **`highlight_and_show` combined tool** — highlights nodes and shows snippet cards in a single MCP round-trip instead of two separate calls
+- **SKILL.md MCP section** — documents all MCP tools, recommended flow, and OpenCode setup so the AI uses them proactively
+
+### Changed
+
+- `get_graph_structure` response is cached and invalidated on graph changes — subsequent calls are instant
+- MCP responses use compact JSON (no pretty-printing) to reduce token cost
+- Nodes without cluster assignments or links are omitted from `get_graph_structure` to reduce payload size
+
+### Fixed
+
+- `analysis.json` with a UTF-8 BOM (written by some Windows editors) was silently rejected by `JSON.parse`, causing clustering and AI analysis to appear absent — BOM is now stripped before parsing
+- MCP `tools/call` responses were missing the required `content` array wrapper, causing the LLM to receive results it couldn't interpret
+- MCP node highlights no longer accidentally activate the cluster boundary highlight for the highlighted nodes' cluster
+
 ## [2.2.1] - 2026-08-21
 
 ### Fixed

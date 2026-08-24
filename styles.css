@@ -237,54 +237,95 @@
 
 /* ── Snippet overlay ────────────────────────────────────────────────────── */
 
+.samind-snippet-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0);
+	pointer-events: none;
+	z-index: 15;
+	transition: background 0.3s ease;
+}
+
+.samind-snippet-backdrop.is-active {
+	background: rgba(0, 0, 0, 0.45);
+	pointer-events: none;
+}
+
 .samind-snippet-overlay {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
-	z-index: 10;
+	z-index: 20;
 }
 
 .samind-snippet-svg {
 	position: absolute;
 	inset: 0;
 	overflow: visible;
+	pointer-events: none;
 }
 
 .samind-snippet-cards {
 	position: absolute;
 	inset: 0;
+	pointer-events: none;
 }
 
 .samind-snippet-card {
 	position: absolute;
-	width: 240px;
-	background: var(--background-secondary);
+	width: 280px;
+	background: var(--background-primary);
 	border: 1px solid var(--snippet-accent, var(--color-accent));
 	border-radius: 8px;
 	padding: 10px 12px;
-	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
 	pointer-events: auto;
 	transition: opacity 0.2s ease;
 	opacity: 0;
+	/* expand to fit content up to max-height, then scroll */
+	max-height: 320px;
+	display: flex;
+	flex-direction: column;
 }
 
 .samind-snippet-card-title {
-	font-size: 0.78rem;
+	font-size: 0.8rem;
 	font-weight: 700;
 	color: var(--snippet-accent, var(--text-accent));
 	margin-bottom: 6px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	flex-shrink: 0;
 }
 
 .samind-snippet-card-body {
-	font-size: 0.72rem;
-	color: var(--text-muted);
-	line-height: 1.45;
-	max-height: 90px;
-	overflow: hidden;
-	display: -webkit-box;
-	-webkit-line-clamp: 5;
-	-webkit-box-orient: vertical;
+	font-size: 0.73rem;
+	color: var(--text-normal);
+	line-height: 1.5;
+	overflow-y: auto;
+	flex: 1;
+}
+
+/* Rendered markdown inside snippet cards */
+.samind-snippet-card-body > .markdown-rendered,
+.samind-snippet-card-body p,
+.samind-snippet-card-body ul,
+.samind-snippet-card-body ol {
+	margin: 0 0 4px 0;
+	font-size: inherit;
+	line-height: inherit;
+}
+
+.samind-snippet-card-body a.internal-link,
+.samind-snippet-card-body a.external-link {
+	color: var(--snippet-accent, var(--text-accent));
+	text-decoration: none;
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+.samind-snippet-card-body a.internal-link:hover,
+.samind-snippet-card-body a.external-link:hover {
+	text-decoration: underline;
 }

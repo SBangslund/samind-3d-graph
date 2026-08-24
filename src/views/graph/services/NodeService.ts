@@ -66,6 +66,9 @@ export class NodeService extends AbstractGraphService {
     private activeLeafChangeRef: EventRef;
     private hoveredClusterId: string | null = null;
     private lastClusterHoverCheck = 0;
+    // Called whenever the user explicitly clears state (background click/right-click)
+    // — ForceGraph wires this to snippetOverlay.clear() so cards dismiss together
+    public onClear: (() => void) | null = null;
 
     constructor(
         instance: ForceGraph3DInstance,
@@ -549,6 +552,8 @@ export class NodeService extends AbstractGraphService {
         this.isMcpActive = true;
         this.isPinnedByUser = true;
         this.inspecting = true;
+        // MCP node highlight has no cluster affiliation — clear any cluster highlight
+        this.setHoveredClusterId(null);
         paths.forEach((path) => {
             const node = this.graph.getNodeById(path);
             if (!node) return;
@@ -603,7 +608,7 @@ export class NodeService extends AbstractGraphService {
     }
 
     private onRemove(): void {
-        // A background right-click explicitly clears everything including MCP
+        // A background click/right-click explicitly clears everything including MCP
         this.isMcpActive = false;
         this.inspecting = false;
         this.isPinnedByUser = false;
@@ -611,6 +616,7 @@ export class NodeService extends AbstractGraphService {
         this.highlightService.clear();
         this.setHoveredClusterId(null);
         this.update();
+        this.onClear?.();
     }
 
     private onNodeRightClick(node: Node | null) {

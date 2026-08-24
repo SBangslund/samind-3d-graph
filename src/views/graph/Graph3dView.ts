@@ -85,17 +85,25 @@ export class Graph3dView extends ItemView {
 			.getInstance()
 			.onNodeClick((node: Node, mouseEvent: MouseEvent) => {
 				const clickedNodeFile = this.app.vault.getFileByPath(node.path);
+				if (!clickedNodeFile) return;
 
-				if (clickedNodeFile) {
-					if (this.isLocalGraph) {
-						void this.app.workspace
-							.getLeaf(false)
-							.openFile(clickedNodeFile);
-					} else {
-						void this.app.workspace
-							.getLeaf()
-							.openFile(clickedNodeFile);
-					}
+				// Ctrl/Cmd + click → hover preview instead of opening the file
+				if (mouseEvent.ctrlKey || mouseEvent.metaKey) {
+					this.app.workspace.trigger('hover-link', {
+						event: mouseEvent,
+						source: 'samind-graph-snippets',
+						hoverParent: { hoverPopover: null },
+						targetEl: mouseEvent.target as HTMLElement,
+						linktext: node.path,
+						sourcePath: node.path,
+					});
+					return;
+				}
+
+				if (this.isLocalGraph) {
+					void this.app.workspace.getLeaf(false).openFile(clickedNodeFile);
+				} else {
+					void this.app.workspace.getLeaf().openFile(clickedNodeFile);
 				}
 			});
 	}

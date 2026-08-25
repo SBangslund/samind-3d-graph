@@ -5,5 +5,5 @@
 	"description": "A 3D force-directed graph with AI-driven topic clustering and gap-insight analysis.",
 	"author": "Samuel Bangslund",
 	"isDesktopOnly": true,
-	"version": "2.3.0"
+	"version": "2.3.1"
 }

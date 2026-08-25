@@ -175,7 +175,13 @@ export class McpServer {
 		this.port = port;
 	}
 
+	isRunning(): boolean {
+		return this.server !== null;
+	}
+
 	start(): void {
+		if (this.server) return; // already running - avoid orphaning the old listener
+
 		// Use dynamic require so the Node built-in is resolved at runtime inside
 		// Electron rather than bundled by esbuild (it's listed in `external`).
 		// eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -191,9 +197,7 @@ export class McpServer {
 			});
 		});
 
-		this.server.listen(this.port, '127.0.0.1', () => {
-			console.log(`Samind MCP server listening on http://127.0.0.1:${this.port}/mcp`);
-		});
+		this.server.listen(this.port, '127.0.0.1');
 
 		this.server.on('error', (err: NodeJS.ErrnoException) => {
 			if (err.code === 'EADDRINUSE') {
@@ -212,20 +216,14 @@ export class McpServer {
 		if (this.graphChangedRef) EventBus.offref(this.graphChangedRef);
 	}
 
-	private addCors(res: ServerResponse): void {
-		res.setHeader('Access-Control-Allow-Origin', '*');
-		res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-		res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
-	}
-
 	private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-		this.addCors(res);
-
-		if (req.method === 'OPTIONS') {
-			res.writeHead(204);
-			res.end();
-			return;
-		}
+		// Deliberately no Access-Control-Allow-* headers: real MCP clients
+		// (OpenCode, etc.) are native/CLI tools that don't send an Origin
+		// header and aren't subject to CORS at all. Adding a wildcard CORS
+		// header here would do nothing for them but let any webpage open in
+		// a browser on this machine read vault content from this server via
+		// fetch() - a classic localhost-plus-wildcard-CORS drive-by hole.
+		// Without it, the browser's own same-origin policy blocks that.
 
 		const url = new URL(req.url ?? '/', `http://127.0.0.1:${this.port}`);
 

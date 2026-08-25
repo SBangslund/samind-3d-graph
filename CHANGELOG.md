@@ -4,6 +4,21 @@ All notable changes to this plugin are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-08-25
+
+2.3.0 never actually published - its own release build failed the same
+`tsc` error below, so no release/assets exist for it. This supersedes it.
+
+### Fixed
+
+- Build was broken: `registerHoverLinkSource` was called on `app.workspace`, but it's a method on `Plugin` itself (`this.registerHoverLinkSource(...)`) - the release workflow's own build step failed the same way, so 2.3.0 never got far enough to reach the community review
+- MCP server sent `Access-Control-Allow-Origin: *` with no authentication, while exposing tools that read arbitrary vault file content - real MCP clients (OpenCode, etc.) are native/CLI tools that don't send an `Origin` header and aren't subject to CORS at all, so this only ever served to let any webpage open in a browser on the same machine read vault content via `fetch()`. Removed entirely - the browser's own same-origin policy now blocks that
+
+### Changed
+
+- MCP server is now **off by default**, behind a new toggle in the graph's Settings panel (gear icon → MCP Server) - it previously started unconditionally on every plugin load
+- README's privacy section updated to describe the optional MCP server truthfully instead of claiming no network activity at all
+
 ## [2.3.0] - 2026-08-24
 
 ### Added

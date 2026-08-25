@@ -13,6 +13,7 @@ Forked from [Obsidian 3D Graph](https://github.com/AlexW00/obsidian-3d-graph) by
 - **Explode interaction** — double-click a cluster to spread it apart and frame the camera on it
 - **Gap insights** — surfaces AI-found structural gaps between clusters (e.g. two topics that should probably reference each other but don't), with a "show in graph" button that highlights and frames the relevant clusters
 - **Cluster legend** — a collapsible panel listing each cluster's color, note count, and share of the vault
+- **MCP server (optional, off by default)** — lets an MCP-compatible AI tool (e.g. OpenCode) query the graph and drive highlights/snippet cards while talking to you
 
 ### Installation
 
@@ -37,9 +38,17 @@ This plugin does **not** call out to any AI backend itself. Instead, it reads a 
 
 Re-run the same skill any time your vault changes enough that the clustering feels stale.
 
+### MCP server (optional)
+
+Off by default. Enabling it (Settings panel → MCP Server) starts a local server at `http://127.0.0.1:27184/mcp` that lets an MCP-compatible AI tool query the graph's structure and drive highlights/snippet cards. It only accepts connections from this machine and only exposes read access to your vault plus the same highlight actions available in the UI — see [`src/mcp/McpServer.ts`](src/mcp/McpServer.ts) for exactly what it does. Configure a client (e.g. OpenCode) with:
+
+```json
+"mcp": { "samind-graph": { "type": "remote", "url": "http://127.0.0.1:27184/mcp" } }
+```
+
 ### Privacy
 
-This plugin makes no network requests and reads no files outside your vault.
+This plugin reads no files outside your vault. It makes no outbound network requests, and the only network activity of any kind is the optional local MCP server above, which is off unless you turn it on.
 
 ### License
 

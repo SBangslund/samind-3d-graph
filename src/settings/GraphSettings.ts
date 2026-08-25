@@ -2,23 +2,27 @@ import { DisplaySettings } from "./categories/DisplaySettings";
 import { FilterSettings } from "./categories/FilterSettings";
 import { GroupSettings } from "./categories/GroupSettings";
 import { ClusterPhysicsSettings } from "./categories/ClusterPhysicsSettings";
+import { McpSettings } from "./categories/McpSettings";
 
 export default class GraphSettings {
 	filters: FilterSettings;
 	groups: GroupSettings;
 	display: DisplaySettings;
 	clusterPhysics: ClusterPhysicsSettings;
+	mcp: McpSettings;
 
 	constructor(
 		filterOptions: FilterSettings,
 		groupOptions: GroupSettings,
 		displayOptions: DisplaySettings,
-		clusterPhysicsOptions: ClusterPhysicsSettings
+		clusterPhysicsOptions: ClusterPhysicsSettings,
+		mcpOptions: McpSettings
 	) {
 		this.filters = filterOptions;
 		this.groups = groupOptions;
 		this.display = displayOptions;
 		this.clusterPhysics = clusterPhysicsOptions;
+		this.mcp = mcpOptions;
 	}
 
 	public static fromStore(store: Partial<GraphSettings> | undefined) {
@@ -26,7 +30,8 @@ export default class GraphSettings {
 			FilterSettings.fromStore(store?.filters),
 			GroupSettings.fromStore(store?.groups),
 			DisplaySettings.fromStore(store?.display),
-			ClusterPhysicsSettings.fromStore(store?.clusterPhysics)
+			ClusterPhysicsSettings.fromStore(store?.clusterPhysics),
+			McpSettings.fromStore(store?.mcp)
 		);
 	}
 
@@ -35,6 +40,7 @@ export default class GraphSettings {
 		Object.assign(this.groups, new GroupSettings());
 		Object.assign(this.display, new DisplaySettings());
 		Object.assign(this.clusterPhysics, new ClusterPhysicsSettings());
+		Object.assign(this.mcp, new McpSettings());
 	}
 
 	public toObject() {
@@ -43,6 +49,7 @@ export default class GraphSettings {
 			groups: this.groups.toObject(),
 			display: this.display.toObject(),
 			clusterPhysics: this.clusterPhysics.toObject(),
+			mcp: this.mcp.toObject(),
 		};
 	}
 }

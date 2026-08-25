@@ -108,11 +108,13 @@ to see the updated clusters/sizing.
 
 # Samind Graph MCP — Live Graph Interaction
 
-The Samind 3D Graph plugin also exposes a **local MCP server** on
-`http://localhost:27184/mcp` while the plugin is loaded. This gives you live,
-two-way control of the graph while talking to the user — highlight relevant
-nodes, surface note snippets, and query the vault topology **without the user
-having to navigate manually**.
+The Samind 3D Graph plugin can also expose a **local MCP server** on
+`http://localhost:27184/mcp` - this gives you live, two-way control of the
+graph while talking to the user: highlight relevant nodes, surface note
+snippets, and query the vault topology **without the user having to navigate
+manually**. It's off by default; the user needs to enable it in the graph's
+Settings panel (gear icon → MCP Server) before these tools will respond. If a
+tool call fails to connect, ask the user to enable it there.
 
 ## When to use
 

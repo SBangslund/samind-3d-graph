@@ -38,7 +38,7 @@ export default class Graph3dPlugin extends Plugin {
 		await this.init();
 		// Register snippet overlay as a hover-link source so Obsidian's
 		// Page Preview plugin shows popups when hovering [[wikilinks]] in cards
-		this.app.workspace.registerHoverLinkSource('samind-graph-snippets', {
+		this.registerHoverLinkSource('samind-graph-snippets', {
 			display: 'Samind 3D Graph snippets',
 			defaultMod: true,
 		});
@@ -74,7 +74,7 @@ export default class Graph3dPlugin extends Plugin {
 		await this.initStates();
 		this.initListeners();
 		this.mcpServer = new McpServer(this);
-		this.mcpServer.start();
+		if (this.settingsState.value.mcp.enabled) this.mcpServer.start();
 	}
 
 	private async initStates() {
@@ -91,7 +91,16 @@ export default class Graph3dPlugin extends Plugin {
 	private initListeners() {
 		this.callbackUnregisterHandles.push(
 			// save settings on change
-			this.settingsState.onChange(() => void this.saveSettings())
+			this.settingsState.onChange((data) => {
+				if (data.currentPath === "mcp.enabled") {
+					if (this.settingsState.value.mcp.enabled) {
+						this.mcpServer.start();
+					} else {
+						this.mcpServer.stop();
+					}
+				}
+				void this.saveSettings();
+			})
 		);
 
 		// internal event to reset settings to default

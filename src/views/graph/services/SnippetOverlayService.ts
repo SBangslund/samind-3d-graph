@@ -46,9 +46,7 @@ export class SnippetOverlayService {
 		this.container = rootEl.createDiv({ cls: 'samind-snippet-overlay' });
 
 		// SVG layer for connector lines (behind cards)
-		this.svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg') as SVGSVGElement;
-		this.svgEl.classList.add('samind-snippet-svg');
-		this.container.appendChild(this.svgEl);
+		this.svgEl = this.container.createSvg('svg', { cls: 'samind-snippet-svg' });
 
 		// Div layer for cards (above SVG)
 		this.cardsEl = this.container.createDiv({ cls: 'samind-snippet-cards' });
@@ -92,17 +90,16 @@ export class SnippetOverlayService {
 			const accent = entry.color ?? 'var(--color-accent)';
 
 			// SVG connector line
-			const line = document.createElementNS('http://www.w3.org/2000/svg', 'line') as SVGLineElement;
+			const line = this.svgEl.createSvg('line');
 			line.setAttribute('stroke', accent);
 			line.setAttribute('stroke-width', '1.5');
 			line.setAttribute('stroke-opacity', '0.75');
 			line.setAttribute('stroke-dasharray', '5 3');
 			line.dataset.index = String(i);
-			this.svgEl.appendChild(line);
 
 			// Card element
 			const card = this.cardsEl.createDiv({ cls: 'samind-snippet-card' });
-			card.style.setProperty('--snippet-accent', accent);
+			card.setCssProps({ '--snippet-accent': accent });
 			card.dataset.index = String(i);
 
 			const titleEl = card.createDiv({ cls: 'samind-snippet-card-title' });
@@ -164,8 +161,8 @@ export class SnippetOverlayService {
 			if (!card || !line) return;
 
 			if (rNode?.x == null || rNode?.y == null || rNode?.z == null) {
-				card.style.opacity = '0';
-				line.style.display = 'none';
+				card.setCssStyles({ opacity: '0' });
+				line.setCssStyles({ display: 'none' });
 				return;
 			}
 
@@ -188,10 +185,12 @@ export class SnippetOverlayService {
 				: Math.max(nx - 70 - CARD_WIDTH, CARD_MARGIN);
 			const cardY = Math.max(CARD_MARGIN, Math.min(idealCardY, H - cardH - CARD_MARGIN));
 
-			card.style.left = cardX + 'px';
-			card.style.top = cardY + 'px';
-			card.style.opacity = '1';
-			line.style.display = '';
+			card.setCssStyles({
+				left: cardX + 'px',
+				top: cardY + 'px',
+				opacity: '1',
+			});
+			line.setCssStyles({ display: '' });
 
 			// Line from node sphere edge → card anchor point
 			const cardAnchorX = onRight ? cardX : cardX + CARD_WIDTH;

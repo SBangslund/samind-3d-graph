@@ -12,7 +12,10 @@
 
 import type { EventRef } from 'obsidian';
 import type Graph3dPlugin from 'src/main';
-import type { IncomingMessage, ServerResponse, Server } from 'http';
+// Marked external in esbuild.config.mjs, so this compiles to a plain
+// require("http") in the bundled CJS output - resolved at runtime inside
+// Electron rather than bundled.
+import * as http from 'http';
 import EventBus from 'src/util/EventBus';
 
 const MCP_PROTOCOL_VERSION = '2024-11-05';
@@ -165,7 +168,7 @@ const TOOLS: McpTool[] = [
 ];
 
 export class McpServer {
-	private server: Server | null = null;
+	private server: http.Server | null = null;
 	private port: number;
 	// Cached graph structure — rebuilt on graph-changed, served instantly after
 	private structureCache: string | null = null;
@@ -181,11 +184,6 @@ export class McpServer {
 
 	start(): void {
 		if (this.server) return; // already running - avoid orphaning the old listener
-
-		// Use dynamic require so the Node built-in is resolved at runtime inside
-		// Electron rather than bundled by esbuild (it's listed in `external`).
-		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const http = require('http') as typeof import('http');
 
 		this.server = http.createServer((req, res) => {
 			this.handleRequest(req, res).catch((err) => {
@@ -216,7 +214,7 @@ export class McpServer {
 		if (this.graphChangedRef) EventBus.offref(this.graphChangedRef);
 	}
 
-	private async handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+	private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
 		// Deliberately no Access-Control-Allow-* headers: real MCP clients
 		// (OpenCode, etc.) are native/CLI tools that don't send an Origin
 		// header and aren't subject to CORS at all. Adding a wildcard CORS

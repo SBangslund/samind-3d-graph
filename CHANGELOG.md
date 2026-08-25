@@ -4,6 +4,14 @@ All notable changes to this plugin are documented here. Format follows [Keep a C
 
 ## [Unreleased]
 
+## [2.3.2] - 2026-08-25
+
+### Fixed
+
+- `McpServer.ts` mixed a type-only `import type {...} from 'http'` with a separate runtime `require('http')` cast via `as typeof import('http')` - under the review's type-checking this resolved `Server` to TypeScript's internal `error` placeholder rather than a real type, cascading into "unsafe any" warnings across nearly the entire file. Replaced with a single `import * as http from 'http'` (still compiles to the same externalized `require("http")` in the bundle, since `http` is already marked external in esbuild.config.mjs) - no `require()` call or eslint-disable needed at all
+- `SnippetOverlayService.ts`: SVG elements were created via `document.createElementNS(...) as SVGSVGElement`/`as SVGLineElement`; switched to Obsidian's typed `createSvg()` helper, which needs no assertion
+- Remaining direct `.style.*`/`.style.setProperty()` mutations in `SnippetOverlayService.ts` replaced with `setCssStyles`/`setCssProps`
+
 ## [2.3.1] - 2026-08-25
 
 2.3.0 never actually published - its own release build failed the same

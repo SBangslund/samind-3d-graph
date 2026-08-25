@@ -48,7 +48,7 @@ Off by default. Enabling it (Settings panel → MCP Server) starts a local serve
 
 ### Privacy
 
-This plugin reads no files outside your vault. It makes no outbound network requests, and the only network activity of any kind is the optional local MCP server above, which is off unless you turn it on.
+This plugin reads no files outside your vault and makes no network requests - it never connects out to anywhere, local or remote. The one exception is the optional MCP server above: when you turn it on, the plugin *listens* on `127.0.0.1` for incoming local connections (it doesn't request anything itself), and is off by default.
 
 ### License
 
